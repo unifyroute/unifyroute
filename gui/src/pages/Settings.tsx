@@ -144,7 +144,7 @@ export function Settings() {
                     <CardHeader className="flex flex-row items-center justify-between space-y-0">
                         <div className="space-y-1">
                             <CardTitle>Gateway API Keys</CardTitle>
-                            <CardDescription>Authentication keys used by downstream clients and OpenRouter to connect to this router.</CardDescription>
+                            <CardDescription>Authentication keys used by downstream clients and UnifyRouter to connect to this router.</CardDescription>
                         </div>
                         <Button onClick={() => setCreateOpen(true)}>Generate New Key</Button>
                     </CardHeader>
@@ -275,7 +275,7 @@ export function Settings() {
                             <div className="grid gap-4 py-6">
                                 <div className="space-y-2">
                                     <Label>Key Label</Label>
-                                    <Input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="e.g. OpenRouter Production" autoFocus />
+                                    <Input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="e.g. UnifyRouter Production" autoFocus />
                                 </div>
                             </div>
                             <DialogFooter>

@@ -191,7 +191,7 @@ async def antigravity_callback(
     if email: token_data["email"] = email
     if name: token_data["name"] = name
 
-    token_data["_openrouter_issued_at"] = time.time()
+    token_data["_unifyroute_issued_at"] = time.time()
     # Store OAuth client details so the credential vault refresh job can use them
     token_data["client_id"] = _ANTIGRAVITY_CLIENT_ID
     token_data["client_secret"] = _ANTIGRAVITY_CLIENT_SECRET

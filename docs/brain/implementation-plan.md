@@ -18,7 +18,7 @@ LLMWay is an AI gateway with a router, credential vault, and API gateway. This p
 
 ---
 
-#### [MODIFY] [adapters.py](file:///home/himanshu/code/openrouter/router/src/router/adapters.py)
+#### [MODIFY] [adapters.py](file:///home/himanshu/code/unifyroute/router/src/router/adapters.py)
 
 Add new `FireworksAdapter` class and register it in the `adapters` dict:
 
@@ -51,7 +51,7 @@ Register: `"fireworks": FireworksAdapter()`
 
 ---
 
-#### [MODIFY] [main.py](file:///home/himanshu/code/openrouter/api-gateway/src/api_gateway/main.py)
+#### [MODIFY] [main.py](file:///home/himanshu/code/unifyroute/api-gateway/src/api_gateway/main.py)
 
 - Add `fireworks` to `_PROVIDER_SEED` list
 - Add Fireworks.ai branch in `verify_credential` (uses Bearer token, GET `/inference/v1/models`)
@@ -80,13 +80,13 @@ brain/
 
 ---
 
-#### [NEW] [brain/pyproject.toml](file:///home/himanshu/code/openrouter/brain/pyproject.toml)
+#### [NEW] [brain/pyproject.toml](file:///home/himanshu/code/unifyroute/brain/pyproject.toml)
 
 Standard Python package, depends on `shared`, `httpx`, `pydantic`.
 
 ---
 
-#### [NEW] [brain/src/brain/config.py](file:///home/himanshu/code/openrouter/brain/src/brain/config.py)
+#### [NEW] [brain/src/brain/config.py](file:///home/himanshu/code/unifyroute/brain/src/brain/config.py)
 
 ```python
 # Tracks which providers/credentials/models the Brain may use.
@@ -105,7 +105,7 @@ Includes a DB model `BrainConfig` (new table) storing these assignments, so they
 
 ---
 
-#### [NEW] [brain/src/brain/health.py](file:///home/himanshu/code/openrouter/brain/src/brain/health.py)
+#### [NEW] [brain/src/brain/health.py](file:///home/himanshu/code/unifyroute/brain/src/brain/health.py)
 
 - `check_endpoint(url, headers, timeout=5) -> HealthResult`
 - `test_provider_health(provider_name, api_key, base_url=None) -> HealthResult`
@@ -114,7 +114,7 @@ Includes a DB model `BrainConfig` (new table) storing these assignments, so they
 
 ---
 
-#### [NEW] [brain/src/brain/importer.py](file:///home/himanshu/code/openrouter/brain/src/brain/importer.py)
+#### [NEW] [brain/src/brain/importer.py](file:///home/himanshu/code/unifyroute/brain/src/brain/importer.py)
 
 - `import_from_dict(data: dict, session) -> ImportResult` — parses JSON/YAML-loaded dict
 - `import_from_yaml_str(yaml_str: str, session) -> ImportResult`
@@ -138,7 +138,7 @@ brain_assignments:
 
 ---
 
-#### [NEW] [brain/src/brain/tester.py](file:///home/himanshu/code/openrouter/brain/src/brain/tester.py)
+#### [NEW] [brain/src/brain/tester.py](file:///home/himanshu/code/unifyroute/brain/src/brain/tester.py)
 
 - `test_all_brain_credentials(session) -> List[TestResult]`
 - For each brain-assigned credential: calls `health.test_provider_health()`
@@ -148,7 +148,7 @@ brain_assignments:
 
 ---
 
-#### [NEW] [brain/src/brain/ranker.py](file:///home/himanshu/code/openrouter/brain/src/brain/ranker.py)
+#### [NEW] [brain/src/brain/ranker.py](file:///home/himanshu/code/unifyroute/brain/src/brain/ranker.py)
 
 Scores each brain provider/credential/model triple:
 
@@ -164,7 +164,7 @@ Scores each brain provider/credential/model triple:
 
 ---
 
-#### [NEW] [brain/src/brain/selector.py](file:///home/himanshu/code/openrouter/brain/src/brain/selector.py)
+#### [NEW] [brain/src/brain/selector.py](file:///home/himanshu/code/unifyroute/brain/src/brain/selector.py)
 
 - `select_for_brain(session) -> BrainSelection`
 - Returns `BrainSelection(provider, credential_id, model_id, reason)`
@@ -173,7 +173,7 @@ Scores each brain provider/credential/model triple:
 
 ---
 
-#### [NEW] [brain/src/brain/errors.py](file:///home/himanshu/code/openrouter/brain/src/brain/errors.py)
+#### [NEW] [brain/src/brain/errors.py](file:///home/himanshu/code/unifyroute/brain/src/brain/errors.py)
 
 - `brain_safe_message(exc: Exception) -> str` — maps exceptions to friendly messages
 - Same pattern as `get_friendly_error_message` in `main.py` but for brain context
@@ -182,7 +182,7 @@ Scores each brain provider/credential/model triple:
 
 ### 3. Brain API Endpoints in api-gateway
 
-#### [MODIFY] [main.py](file:///home/himanshu/code/openrouter/api-gateway/src/api_gateway/main.py)
+#### [MODIFY] [main.py](file:///home/himanshu/code/unifyroute/api-gateway/src/api_gateway/main.py)
 
 New endpoints under `/admin/brain/` (all require admin key):
 
@@ -225,19 +225,19 @@ Generate a new Alembic migration.
 
 #### Existing test suite (regression check)
 ```bash
-cd /home/himanshu/code/openrouter
+cd /home/himanshu/code/unifyroute
 uv run pytest tests/ -v --tb=short
 ```
 
 #### New unit tests
 ```bash
-cd /home/himanshu/code/openrouter
+cd /home/himanshu/code/unifyroute
 uv run pytest tests/test_fireworks.py tests/test_brain_health.py tests/test_brain_importer.py tests/test_brain_ranker.py -v
 ```
 
 #### New integration tests (requires running gateway)
 ```bash
-cd /home/himanshu/code/openrouter
+cd /home/himanshu/code/unifyroute
 uv run pytest tests/test_brain_api.py -v
 ```
 

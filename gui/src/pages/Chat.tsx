@@ -21,8 +21,8 @@ const MODEL_OPTIONS = [
     { value: "thinking", label: "Thinking tier" },
 ]
 
-const STORAGE_KEY = "openrouter_chat_history"
-const SETTINGS_KEY = "openrouter_chat_settings"
+const STORAGE_KEY = "unifyroute_chat_history"
+const SETTINGS_KEY = "unifyroute_chat_settings"
 
 function loadHistory(): DisplayMessage[] {
     try {

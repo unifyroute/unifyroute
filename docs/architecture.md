@@ -26,5 +26,5 @@ UnifyRoute is a gateway-centric architecture for OpenAI-compatible traffic.
 
 ## Related Documents
 
-- Legacy deep-dive design doc: `docs/openrouter-architecture.md`
+- Legacy deep-dive design doc: `docs/unifyroute-architecture.md`
 - Progress tracker: `docs/progress-and-todo.md`

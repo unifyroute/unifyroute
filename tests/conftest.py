@@ -1,5 +1,5 @@
 """
-Pytest configuration and shared fixtures for the OpenRouter test suite.
+Pytest configuration and shared fixtures for the UnifyRouter test suite.
 
 The tests hit the live API gateway that must be running on localhost:6565.
 They require two environment variables (or .env):
@@ -7,8 +7,8 @@ They require two environment variables (or .env):
   API_TOKEN   – a gateway key with ["api"] scope (no admin)
 
 You can create them with:
-  ./openrouter key          # creates API token
-  ./openrouter key --admin  # creates admin token
+  ./unifyroute key          # creates API token
+  ./unifyroute key --admin  # creates admin token
 
 The tokens are also read from .admin_token and .api_token files at the project root.
 """

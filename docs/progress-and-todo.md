@@ -33,7 +33,7 @@
   - Generic OAuth: `GET /oauth/start/{provider_id}` + `GET /oauth/callback`
   - Google Antigravity (gemini-cli): dedicated PKCE flow with hardcoded client credentials
   - Callback stores encrypted tokens & posts `oauth_success` to opener window
-- [x] **Model sync** — Provider-specific logic for OpenAI, Anthropic, Google, Groq, OpenRouter, Together, HuggingFace + generic fallback
+- [x] **Model sync** — Provider-specific logic for OpenAI, Anthropic, Google, Groq, UnifyRouter, Together, HuggingFace + generic fallback
 
 ### 1.3 Router (`router/`)
 - [x] `select_model()` — Tier-based routing from `routing.yaml` config
@@ -73,7 +73,7 @@
 
 ### 1.7 Infrastructure
 - [x] Docker Compose — PostgreSQL 16 + Redis 7 (data stores only)
-- [x] `openrouter` launcher script (CLI entrypoint)
+- [x] `unifyroute` launcher script (CLI entrypoint)
 - [x] Setup script (`scripts/setup.sh`)
 - [x] Admin key creation script (`scripts/create-key.py`)
 - [x] Cleanup script (`scripts/cleanup.sh`)

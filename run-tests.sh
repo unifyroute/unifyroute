@@ -14,7 +14,7 @@
 #   - For integration tests: API gateway must be running on http://localhost:6565
 #     (or override: OPENROUTER_BASE_URL=http://host:port ./run-tests.sh)
 #   - .admin_token and .api_token files exist at the project root
-#     (created automatically by: ./openrouter key and ./openrouter key --admin)
+#     (created automatically by: ./unifyroute key and ./unifyroute key --admin)
 #
 # ──────────────────────────────────────────────────────────────────
 set -euo pipefail
@@ -26,7 +26,7 @@ VENV_PYTHON=".venv/bin/python"
 
 if [[ ! -f "$VENV_PYTHON" ]]; then
     echo "❌  Virtual environment not found at .venv/"
-    echo "    Run: ./openrouter setup"
+    echo "    Run: ./unifyroute setup"
     exit 1
 fi
 
@@ -75,7 +75,7 @@ run_integration() {
     # Check admin token
     if [[ ! -f ".admin_token" ]] && [[ -z "${ADMIN_TOKEN:-}" ]]; then
         echo "⚠️  No admin token found (.admin_token file or ADMIN_TOKEN env var)"
-        echo "   Create one with:  ./openrouter key --admin"
+        echo "   Create one with:  ./unifyroute key --admin"
         exit 1
     fi
 

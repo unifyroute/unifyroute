@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-scripts/wizard.py — Interactive CLI Setup Wizard for OpenRouter.
+scripts/wizard.py — Interactive CLI Setup Wizard for UnifyRouter.
 
 Guides the user through:
   1. Selecting a provider to onboard
@@ -13,7 +13,7 @@ Guides the user through:
 The wizard communicates with the running API gateway via HTTP.
 
 Usage:
-  ./openrouter wizard
+  ./unifyroute wizard
   # or directly:
   uv run --package shared python scripts/wizard.py
 """
@@ -390,7 +390,7 @@ def run_wizard(token: str):
         providers = _get("/admin/wizard/providers/available", token)
     except Exception as e:
         err(f"Could not reach API gateway: {e}")
-        err("Make sure OpenRouter is running:  ./openrouter start")
+        err("Make sure UnifyRouter is running:  ./unifyroute start")
         sys.exit(1)
 
     onboarded: List[Dict] = []
@@ -479,7 +479,7 @@ def main():
     token = _get_admin_token()
     if not token:
         err("No admin token found.")
-        info("Create one with:  ./openrouter create token admin")
+        info("Create one with:  ./unifyroute create token admin")
         sys.exit(1)
 
     try:

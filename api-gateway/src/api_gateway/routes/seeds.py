@@ -1,4 +1,4 @@
-# Full provider catalog — mirrors OpenRouter's supported providers
+# Full provider catalog — mirrors UnifyRouter's supported providers
 _PROVIDER_SEED = [
     # ── OAuth / subscription providers ──────────────────────────────────────
     # Google Antigravity: uses gemini-cli PKCE credentials, no user config needed
@@ -29,7 +29,7 @@ _PROVIDER_SEED = [
     {"name": "together",        "display_name": "Together AI",            "auth_type": "api_key", "enabled": True},
     {"name": "xai",             "display_name": "xAI (Grok)",             "auth_type": "api_key", "enabled": True},
     {"name": "nvidia",          "display_name": "NVIDIA NIM",             "auth_type": "api_key", "enabled": True},
-    {"name": "openrouter",      "display_name": "OpenRouter",             "auth_type": "api_key", "enabled": True},
+    {"name": "unifyroute",      "display_name": "UnifyRouter",             "auth_type": "api_key", "enabled": True},
     {"name": "ollama",          "display_name": "Ollama (local)",         "auth_type": "api_key", "enabled": True},
     {"name": "zai",             "display_name": "Z.AI",                   "auth_type": "api_key", "enabled": True},
     {"name": "litellm",         "display_name": "LiteLLM",                "auth_type": "api_key", "enabled": True},

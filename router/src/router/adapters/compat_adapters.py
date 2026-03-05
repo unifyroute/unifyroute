@@ -69,10 +69,10 @@ class TogetherAdapter(_OpenAICompatAdapter):
         super().__init__("together", "together_ai", "https://api.together.xyz/v1", 100_000)
 
 
-class OpenRouterAdapter(_OpenAICompatAdapter):
-    """OpenRouter (openrouter.ai) — OpenAI-compatible, token headers present on requests."""
+class UnifyRouterAdapter(_OpenAICompatAdapter):
+    """UnifyRouter (unifyroute.ai) — OpenAI-compatible, token headers present on requests."""
     def __init__(self):
-        super().__init__("openrouter", "openrouter", "https://openrouter.ai/api/v1", 100_000)
+        super().__init__("unifyroute", "unifyroute", "https://unifyroute.ai/api/v1", 100_000)
 
 
 class PerplexityAdapter(_OpenAICompatAdapter):

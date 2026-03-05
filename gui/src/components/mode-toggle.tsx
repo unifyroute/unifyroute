@@ -5,7 +5,7 @@ import { useTheme } from "@/components/theme-provider"
 export function ModeToggle() {
     const { theme, setTheme } = useTheme()
 
-    // Order: system, light, dark to match OpenRouter precisely
+    // Order: system, light, dark to match UnifyRouter precisely
     const themeIndex = theme === 'system' ? 0 : theme === 'light' ? 1 : 2;
 
     return (

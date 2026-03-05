@@ -275,7 +275,7 @@ export async function startAntigravityOAuth(): Promise<string> {
     return json.oauth_url as string
 }
 
-/** Fetch the full OpenRouter-aligned provider catalog. */
+/** Fetch the full UnifyRouter-aligned provider catalog. */
 export async function getProviderSeeds(): Promise<any[]> {
     return fetcher('/admin/providers/seeds')
 }
@@ -340,7 +340,7 @@ export interface ChatCompletionResponse {
     }>
     usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
     model?: string
-    _openrouter?: { provider: string; latency_ms: number }
+    _unifyroute?: { provider: string; latency_ms: number }
 }
 
 /** Non-streaming chat completion. */

@@ -503,7 +503,7 @@ async def create_key(
 ):
     import secrets
     import hashlib
-    raw_token = f"openrouter-{secrets.token_urlsafe(32)}"
+    raw_token = f"unifyroute-{secrets.token_urlsafe(32)}"
     key_hash = hashlib.sha256(raw_token.encode()).hexdigest()
     
     db_obj = GatewayKey(

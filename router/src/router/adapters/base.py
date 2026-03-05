@@ -38,11 +38,11 @@ async def fetch_json_safe(
         # OpenClaw connectivity gracefully swallows fetch failures at the polling layer
         # to prevent gateway crashes, returning null equivalents.
         import logging
-        logging.getLogger("openrouter.adapters").warning(f"[fetch_json_safe] {method} {url} failed: {request_err}")
+        logging.getLogger("unifyroute.adapters").warning(f"[fetch_json_safe] {method} {url} failed: {request_err}")
         return None
     except Exception as e:
         import logging
-        logging.getLogger("openrouter.adapters").warning(f"[fetch_json_safe] {method} {url} unexpected fail: {e}")
+        logging.getLogger("unifyroute.adapters").warning(f"[fetch_json_safe] {method} {url} unexpected fail: {e}")
         return None
 class ModelInfo:
     """Metadata about a model returned from provider's list."""

@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    /* OpenRouter Light Theme - UnifyRoute Colors */
+    /* UnifyRouter Light Theme - UnifyRoute Colors */
     --background: 210 14% 97%;
     /* Light background from unifyroute */
     --foreground: 0 0% 10%;
@@ -16,7 +16,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 10%;
 
-    /* OpenRouter Primary Color - Dark Gray */
+    /* UnifyRouter Primary Color - Dark Gray */
     --primary: 0 0% 30%;
     /* Dark gray primary */
     --primary-foreground: 0 0% 100%;
@@ -46,7 +46,7 @@
   }
 
   .dark {
-    /* OpenRouter Dark Theme - UnifyRoute Colors */
+    /* UnifyRouter Dark Theme - UnifyRoute Colors */
     --background: 0 0% 6%;
     /* Near black background */
     --foreground: 0 0% 100%;

@@ -7,7 +7,7 @@ tiers:
       - {provider: openai, model: gpt-4o-mini}
       - {provider: anthropic, model: claude-3-5-haiku-20241022}
       - {provider: google, model: gemini-1.5-flash}
-      - {provider: openrouter, model: meta-llama/llama-3.1-8b-instruct:free}
+      - {provider: unifyroute, model: meta-llama/llama-3.1-8b-instruct:free}
       - {provider: groq, model: llama-3.1-8b-instant}
   lite:
     strategy: cheapest_available

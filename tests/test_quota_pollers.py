@@ -36,7 +36,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'shared', 'src'
 from router.adapters import (
     GoogleGeminiAdapter, GroqAdapter, MistralAdapter, CohereAdapter,
     TogetherAdapter, PerplexityAdapter, DeepSeekAdapter, CerebrasAdapter,
-    XAIAdapter, OpenRouterAdapter, FireworksAdapter, ZaiAdapter, QuotaInfo
+    XAIAdapter, UnifyRouterAdapter, FireworksAdapter, ZaiAdapter, QuotaInfo
 )
 
 

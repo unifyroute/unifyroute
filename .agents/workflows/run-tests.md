@@ -7,16 +7,16 @@ description: Run the LLMWay test suite after code changes
 Use this workflow after every code change to run the full test suite.
 
 ### Prerequisites
-- Virtual environment set up: `./openrouter setup`
-- API gateway running (for integration tests): `./openrouter start`
-- `.admin_token` file exists at project root: `./openrouter key --admin`
+- Virtual environment set up: `./unifyroute setup`
+- API gateway running (for integration tests): `./unifyroute start`
+- `.admin_token` file exists at project root: `./unifyroute key --admin`
 
 ---
 
 ### Step 1: Run Unit Tests (no server required, always safe to run)
 
 // turbo
-Run: `./run-tests.sh --unit` from the project root `/home/himanshu/code/openrouter`.
+Run: `./run-tests.sh --unit` from the project root `/home/himanshu/code/unifyroute`.
 
 ✅ Expected: all pass in < 5 seconds. Covers: brain health/importer/ranker/selector/tester, router core, shared security, stream cost.
 
@@ -28,14 +28,14 @@ Check that the API gateway is up:
 ```bash
 curl -s http://localhost:6565/api/ | python3 -m json.tool
 ```
-If it returns an error, start it first: `./openrouter start`
+If it returns an error, start it first: `./unifyroute start`
 
 ---
 
 ### Step 3: Run Integration Tests (requires live gateway)
 
 // turbo
-Run: `./run-tests.sh --integration` from the project root `/home/himanshu/code/openrouter`.
+Run: `./run-tests.sh --integration` from the project root `/home/himanshu/code/unifyroute`.
 
 ✅ Expected: all pass. Covers: auth, providers, credentials, keys, models, routing, brain API, wizard, chat completions, OAuth, gateway health.
 
@@ -44,7 +44,7 @@ Run: `./run-tests.sh --integration` from the project root `/home/himanshu/code/o
 ### Step 4: Run Full Suite (unit + integration)
 
 // turbo
-Run: `./run-tests.sh` from the project root `/home/himanshu/code/openrouter`.
+Run: `./run-tests.sh` from the project root `/home/himanshu/code/unifyroute`.
 
 ✅ Expected: 0 failures, 0 errors.
 

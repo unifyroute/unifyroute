@@ -403,7 +403,7 @@ Some enterprise providers use OAuth2 rather than static API keys:
 Configure OpenClaw (or any OpenAI-compatible client) as follows:
 
 \# OpenClaw / any OpenAI SDK config
-OPENAI_API_BASE=http://openrouter:8000/v1
+OPENAI_API_BASE=http://unifyroute:8000/v1
 OPENROUTER_API_KEY=gw-your-gateway-api-key \# Model names to use: \#
 lite-standard → cheapest available lite model \# base-standard →
 balanced model \# thinking-standard → most capable reasoning model
@@ -428,16 +428,16 @@ balanced model \# thinking-standard → most capable reasoning model
 
 version: \"3.9\" services: api-gateway: build: ./services/api-gateway
 ports: \[\"8000:8000\"\] environment: -
-DATABASE_URL=postgresql://postgres:pass@postgres:5432/openrouter -
+DATABASE_URL=postgresql://postgres:pass@postgres:5432/unifyroute -
 REDIS_URL=redis://redis:6379 - VAULT_MASTER_KEY=\${VAULT_MASTER_KEY}
 depends_on: \[postgres, redis, credential-vault\] credential-vault:
 build: ./services/credential-vault environment: -
-DATABASE_URL=postgresql://postgres:pass@postgres:5432/openrouter -
+DATABASE_URL=postgresql://postgres:pass@postgres:5432/unifyroute -
 MASTER_KEY=\${VAULT_MASTER_KEY} expose: \[\"50051\"\] \# internal gRPC
 only router: build: ./services/router environment: -
 REDIS_URL=redis://redis:6379 - VAULT_GRPC=credential-vault:50051
 quota-poller: build: ./services/quota-poller environment: -
-DATABASE_URL=postgresql://postgres:pass@postgres:5432/openrouter -
+DATABASE_URL=postgresql://postgres:pass@postgres:5432/unifyroute -
 REDIS_URL=redis://redis:6379 - VAULT_GRPC=credential-vault:50051 gui:
 build: ./services/gui ports: \[\"3000:3000\"\] postgres: image:
 postgres:16-alpine volumes: \[\"pgdata:/var/lib/postgresql/data\"\]
@@ -604,7 +604,7 @@ package.
 
 **13. Project File Structure**
 
-openrouter/ ├── docker-compose.yml ├── docker-compose.override.yml ├──
+unifyroute/ ├── docker-compose.yml ├── docker-compose.override.yml ├──
 routing.yaml ├── README.md ├── services/ │ ├── api-gateway/ │ │ ├──
 Dockerfile │ │ ├── pyproject.toml │ │ └── src/ │ │ ├── main.py \#
 FastAPI app, lifespan │ │ ├── auth.py \# API key / JWT middleware │ │
@@ -644,7 +644,7 @@ engine + session └── migrations/ └── alembic/
                                 http://credential-vault:8001)
 
   ROUTING_CONFIG_PATH           Path to routing.yaml (default:
-                                /etc/openrouter/routing.yaml)
+                                /etc/unifyroute/routing.yaml)
 
   QUOTA_POLL_INTERVAL_SECONDS   How often to poll provider quotas (default: 300)
 

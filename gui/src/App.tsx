@@ -89,9 +89,9 @@ const Sidebar = () => {
 const Header = () => (
   <header className="h-16 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 z-10 sticky top-0">
     <div className="flex items-center gap-3">
-      <img src="/images/favicon.png" alt="OpenRoute" className="w-8 h-8 object-contain" />
+      <img src="/images/favicon.png" alt="UnifyRoute" className="w-8 h-8 object-contain" />
       <div>
-        <h1 className="font-bold text-slate-900 dark:text-slate-100 text-lg leading-tight tracking-tight uppercase">OpenRouter</h1>
+        <h1 className="font-bold text-slate-900 dark:text-slate-100 text-lg leading-tight tracking-tight uppercase">UnifyRouter</h1>
         <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium tracking-widest uppercase">Router Gateway Dashboard</p>
       </div>
     </div>

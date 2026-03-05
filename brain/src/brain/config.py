@@ -35,7 +35,7 @@ PROVIDER_HEALTH_URLS: dict[str, str] = {
     "mistral":      "https://api.mistral.ai/v1/models",
     "cohere":       "https://api.cohere.com/v2/models",
     "together":     "https://api.together.xyz/v1/models",
-    "openrouter":   "https://openrouter.ai/api/v1/models",
+    "unifyroute":   "https://unifyroute.ai/api/v1/models",
     "fireworks":    "https://api.fireworks.ai/inference/v1/models",
     "zai":          "https://api.z.ai/api/paas/v4/models",
     "ollama":       "https://ollama.com/v1/models",

@@ -26,7 +26,7 @@
 - [ ] `POST /admin/brain/import` — import providers + credentials from JSON/YAML payload
 - [ ] `POST /admin/brain/test` — trigger full test of all brain credentials
 - [ ] `GET /admin/brain/ranking` — get current ranked list of providers/models for brain use
-- [ ] `POST /admin/brain/select` — select best provider/model (used internally by openrouter system)
+- [ ] `POST /admin/brain/select` — select best provider/model (used internally by unifyroute system)
 
 ## Phase 4: Brain-aware Error Handling
 - [x] Brain catches all exceptions, returns structured error messages (no raw tracebacks)

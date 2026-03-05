@@ -11,7 +11,7 @@ from .zai_adapter import ZaiAdapter
 from .fireworks_adapter import FireworksAdapter
 from .compat_adapters import (
     TogetherAdapter, 
-    OpenRouterAdapter,
+    UnifyRouterAdapter,
     PerplexityAdapter,
     DeepSeekAdapter,
     CerebrasAdapter,
@@ -31,7 +31,7 @@ adapters: Dict[str, ProviderAdapter] = {
     "zai": ZaiAdapter(),
     "fireworks": FireworksAdapter(),
     "together": TogetherAdapter(),
-    "openrouter": OpenRouterAdapter(),
+    "unifyroute": UnifyRouterAdapter(),
     "perplexity": PerplexityAdapter(),
     "deepseek": DeepSeekAdapter(),
     "cerebras": CerebrasAdapter(),

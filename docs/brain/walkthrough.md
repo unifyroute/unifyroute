@@ -4,13 +4,13 @@
 
 ### 1. Fireworks.ai Provider Support
 
-Added `FireworksAdapter` in [adapters.py](file:///home/himanshu/code/openrouter/router/src/router/adapters.py):
+Added `FireworksAdapter` in [adapters.py](file:///home/himanshu/code/unifyroute/router/src/router/adapters.py):
 - OpenAI-compatible at `https://api.fireworks.ai/inference/v1`
 - Uses `fireworks_ai` litellm prefix
 - Model list + quota check via `/v1/models`
 - Registered as `"fireworks"` in the adapters registry
 
-Updated [main.py](file:///home/himanshu/code/openrouter/api-gateway/src/api_gateway/main.py):
+Updated [main.py](file:///home/himanshu/code/unifyroute/api-gateway/src/api_gateway/main.py):
 - Added `fireworks` to `_PROVIDER_SEED` (auto-appears in `/admin/providers/seed`)
 - Added Fireworks branch in `verify_credential` (`GET /inference/v1/models`)
 - Added Fireworks branch in `sync_provider_models`
@@ -23,13 +23,13 @@ New package at `brain/` with the following modules:
 
 | Module | Purpose |
 |---|---|
-| [config.py](file:///home/himanshu/code/openrouter/brain/src/brain/config.py) | `BrainProviderEntry` dataclass + health URL registry for all providers |
-| [health.py](file:///home/himanshu/code/openrouter/brain/src/brain/health.py) | `check_endpoint()` + `check_provider_health()` — async HTTP health checks, all exceptions caught |
-| [importer.py](file:///home/himanshu/code/openrouter/brain/src/brain/importer.py) | `import_from_yaml_str()` / `import_from_json_str()` — idempotent bulk import |
-| [tester.py](file:///home/himanshu/code/openrouter/brain/src/brain/tester.py) | `test_all_brain_credentials()` — tests every brain credential, caches to Redis |
-| [ranker.py](file:///home/himanshu/code/openrouter/brain/src/brain/ranker.py) | `rank_brain_providers()` — multi-factor composite scoring |
-| [selector.py](file:///home/himanshu/code/openrouter/brain/src/brain/selector.py) | `select_for_brain()` — picks best healthy option |
-| [errors.py](file:///home/himanshu/code/openrouter/brain/src/brain/errors.py) | `brain_safe_message()` — maps exceptions to friendly strings |
+| [config.py](file:///home/himanshu/code/unifyroute/brain/src/brain/config.py) | `BrainProviderEntry` dataclass + health URL registry for all providers |
+| [health.py](file:///home/himanshu/code/unifyroute/brain/src/brain/health.py) | `check_endpoint()` + `check_provider_health()` — async HTTP health checks, all exceptions caught |
+| [importer.py](file:///home/himanshu/code/unifyroute/brain/src/brain/importer.py) | `import_from_yaml_str()` / `import_from_json_str()` — idempotent bulk import |
+| [tester.py](file:///home/himanshu/code/unifyroute/brain/src/brain/tester.py) | `test_all_brain_credentials()` — tests every brain credential, caches to Redis |
+| [ranker.py](file:///home/himanshu/code/unifyroute/brain/src/brain/ranker.py) | `rank_brain_providers()` — multi-factor composite scoring |
+| [selector.py](file:///home/himanshu/code/unifyroute/brain/src/brain/selector.py) | `select_for_brain()` — picks best healthy option |
+| [errors.py](file:///home/himanshu/code/unifyroute/brain/src/brain/errors.py) | `brain_safe_message()` — maps exceptions to friendly strings |
 
 **Ranking factors** (all normalised 0→1):
 
@@ -44,7 +44,7 @@ New package at `brain/` with the following modules:
 
 ### 3. Brain API Endpoints
 
-7 new admin-only endpoints in [main.py](file:///home/himanshu/code/openrouter/api-gateway/src/api_gateway/main.py):
+7 new admin-only endpoints in [main.py](file:///home/himanshu/code/unifyroute/api-gateway/src/api_gateway/main.py):
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -60,7 +60,7 @@ New package at `brain/` with the following modules:
 
 ### 4. DB Migration
 
-[a9b8c7d6e5f4_add_brain_configs.py](file:///home/himanshu/code/openrouter/migrations/versions/a9b8c7d6e5f4_add_brain_configs.py) creates:
+[a9b8c7d6e5f4_add_brain_configs.py](file:///home/himanshu/code/unifyroute/migrations/versions/a9b8c7d6e5f4_add_brain_configs.py) creates:
 ```sql
 CREATE TABLE brain_configs (
     id UUID PRIMARY KEY,
@@ -73,7 +73,7 @@ CREATE TABLE brain_configs (
 );
 ```
 
-`BrainConfig` SQLAlchemy model added to [shared/models.py](file:///home/himanshu/code/openrouter/shared/src/shared/models.py)
+`BrainConfig` SQLAlchemy model added to [shared/models.py](file:///home/himanshu/code/unifyroute/shared/src/shared/models.py)
 
 ---
 
@@ -88,7 +88,7 @@ tests/test_brain_ranker.py        4 passed  (empty, healthy>unhealthy, priority,
 TOTAL                            20 passed  ✅
 ```
 
-Integration tests (`tests/test_brain_api.py`) require a running gateway and will run via `./run-tests.sh` after `./openrouter start`.
+Integration tests (`tests/test_brain_api.py`) require a running gateway and will run via `./run-tests.sh` after `./unifyroute start`.
 
 ---
 
@@ -96,7 +96,7 @@ Integration tests (`tests/test_brain_api.py`) require a running gateway and will
 
 ### Apply migration (production)
 ```bash
-# Run from openrouter root with the gateway stopped
+# Run from unifyroute root with the gateway stopped
 alembic upgrade head
 ```
 

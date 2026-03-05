@@ -7,9 +7,9 @@ from sqlalchemy.orm import selectinload
 
 async def main():
     async with async_session_maker() as session:
-        stmt = select(Credential).options(selectinload(Credential.provider)).where(Credential.label == 'openrouter-key-DooSrar')
+        stmt = select(Credential).options(selectinload(Credential.provider)).where(Credential.label == 'unifyroute-key-DooSrar')
         cred = (await session.execute(stmt)).scalar_one()
-        adapter = get_adapter("openrouter")
+        adapter = get_adapter("unifyroute")
         try:
             res = await adapter.chat(cred, [{"role": "user", "content": "hello"}], "meta-llama/llama-3.1-8b-instruct:free", stream=False)
             print(res)

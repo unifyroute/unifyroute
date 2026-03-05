@@ -34,7 +34,7 @@ class TestAvailableProviders:
     def test_includes_known_providers(self, admin_client: httpx.Client):
         r = admin_client.get("/api/admin/wizard/providers/available")
         names = {p["name"] for p in r.json()}
-        for expected in ("openai", "anthropic", "groq", "openrouter"):
+        for expected in ("openai", "anthropic", "groq", "unifyroute"):
             assert expected in names, f"Expected '{expected}' in provider list"
 
     def test_provider_shape(self, admin_client: httpx.Client):
