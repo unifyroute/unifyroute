@@ -3,7 +3,15 @@ import useSWR from 'swr'
 const API_BASE = '/api'
 
 export function getAuthToken(): string {
-    return localStorage.getItem('admin_token') || ''
+    const token = localStorage.getItem('admin_token') || ''
+    // Migration guard: old Login.tsx used to store the real JWT here.
+    // If we detect a JWT (always starts with 'ey'), evict it — auth is handled
+    // by the HTTPOnly cookie and the 'logged_in' flag should be used instead.
+    if (token.startsWith('ey')) {
+        localStorage.removeItem('admin_token')
+        return ''
+    }
+    return token
 }
 
 export function setAuthToken(token: string) {

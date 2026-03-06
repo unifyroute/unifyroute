@@ -11,3 +11,5 @@ openclaw
 piai_src
 tmp_gemini
 tmp_vertex
+*.db
+db.*
