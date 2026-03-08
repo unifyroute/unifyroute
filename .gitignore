@@ -3,15 +3,11 @@ logs
 venv
 __pycache__
 *.pyc
-openclaw
 .env
 .env.backup.*
 .db.backup.*
-*log*
+*.log
 .admin_token
 .api_token
-piai_src
-tmp_gemini
-tmp_vertex
 *.db
 db.*
