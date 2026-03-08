@@ -150,44 +150,74 @@ def write_env_file(path: Path, config: dict[str, str], header: str = ""):
 
 
 def backup_config(reason: str = ""):
-    """Backup the current .env file."""
-    if not ENV_FILE.exists():
-        info("No .env to back up.")
-        return None
+    """Backup the current .env file and SQLite database."""
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = ROOT / f".env.backup.{ts}"
-    shutil.copy(ENV_FILE, backup_path)
-    ok(f"Config backed up → {backup_path.name}{(' (' + reason + ')') if reason else ''}")
-    return backup_path
+    backed_up = []
+
+    if ENV_FILE.exists():
+        env_backup = ROOT / f".env.backup.{ts}"
+        shutil.copy(ENV_FILE, env_backup)
+        backed_up.append(env_backup.name)
+    else:
+        info("No .env to back up.")
+
+    db_file = ROOT / "data" / "unifyroute.db"
+    if db_file.exists():
+        db_backup = ROOT / f".db.backup.{ts}"
+        shutil.copy(db_file, db_backup)
+        backed_up.append(db_backup.name)
+    else:
+        info("No database to back up.")
+        
+    if backed_up:
+        reason_str = f" ({reason})" if reason else ""
+        ok(f"Backed up: {', '.join(backed_up)}{reason_str}")
+        return ts
+    return None
 
 
-def find_saved_configs() -> list[Path]:
-    """Find all .env.backup.* files in the project root, newest first."""
+def find_saved_configs() -> list[str]:
+    """Find all backup timestamps in the project root, newest first.
+    A valid backup has at least a .env.backup.* file.
+    """
     backups = sorted(
         ROOT.glob(".env.backup.*"),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
-    return backups
+    # Return just the timestamp part
+    return [p.name.replace(".env.backup.", "") for p in backups]
 
 
-def restore_config(backup_path: Path) -> dict[str, str]:
-    """Restore configuration from a backup file.
+def restore_config(ts: str) -> dict[str, str]:
+    """Restore configuration and database from a backup timestamp.
 
-    Copies the backup to .env and returns the parsed config dict.
+    Copies the backup files to their original locations.
     """
-    shutil.copy(backup_path, ENV_FILE)
-    config = read_env_file(ENV_FILE)
-    ok(f"Configuration restored from {backup_path.name}")
+    env_backup = ROOT / f".env.backup.{ts}"
+    if env_backup.exists():
+        shutil.copy(env_backup, ENV_FILE)
+        config = read_env_file(ENV_FILE)
+        ok(f"Configuration restored from {env_backup.name}")
+        
+        # Show restored values (mask secrets)
+        secret_keys = {"MASTER_PASSWORD", "VAULT_MASTER_KEY", "JWT_SECRET"}
+        for key, val in config.items():
+            if key in secret_keys:
+                display = val[:3] + "***" if len(val) > 3 else "***"
+            else:
+                display = val
+            info(f"  {key} = {display}")
+    else:
+        config = {}
 
-    # Show restored values (mask secrets)
-    secret_keys = {"MASTER_PASSWORD", "VAULT_MASTER_KEY", "JWT_SECRET"}
-    for key, val in config.items():
-        if key in secret_keys:
-            display = val[:3] + "***" if len(val) > 3 else "***"
-        else:
-            display = val
-        info(f"  {key} = {display}")
+    db_backup = ROOT / f".db.backup.{ts}"
+    if db_backup.exists():
+        data_dir = ROOT / "data"
+        data_dir.mkdir(exist_ok=True)
+        db_file = data_dir / "unifyroute.db"
+        shutil.copy(db_backup, db_file)
+        ok(f"Database restored from {db_backup.name}")
 
     return config
 
@@ -328,11 +358,16 @@ def cmd_install():
     if saved_configs:
         banner("Saved Configurations Found")
         print("  The following saved configurations were found:\n")
-        for i, backup in enumerate(saved_configs, 1):
-            mtime = datetime.datetime.fromtimestamp(backup.stat().st_mtime)
-            # Extract reason tag from filename if present
-            name = backup.name  # e.g. .env.backup.20260308_235500
-            print(f"    {i}. {name}  ({mtime.strftime('%Y-%m-%d %H:%M:%S')})")
+        for i, ts in enumerate(saved_configs, 1):
+            env_backup = ROOT / f".env.backup.{ts}"
+            mtime = datetime.datetime.fromtimestamp(env_backup.stat().st_mtime)
+            
+            # Check what's included
+            includes = [".env"]
+            if (ROOT / f".db.backup.{ts}").exists():
+                includes.append("unifyroute.db")
+                
+            print(f"    {i}. Backup from {mtime.strftime('%Y-%m-%d %H:%M:%S')}  [includes: {', '.join(includes)}]")
         print()
 
         if ask_bool("Would you like to restore a previously saved configuration?", default=True):
@@ -348,10 +383,10 @@ def cmd_install():
                     warn(f"Invalid choice. Using most recent backup.")
                     choice = 1
 
-            selected = saved_configs[choice - 1]
-            config = restore_config(selected)
+            selected_ts = saved_configs[choice - 1]
+            config = restore_config(selected_ts)
             restored = True
-            ok("Configuration restored! Skipping interactive configuration steps.")
+            ok("Configuration and database restored! Skipping interactive configuration steps.")
 
     if not restored:
         # ── 1. Database ────────────────────────────────────────────────
@@ -453,19 +488,21 @@ def cmd_install():
     # ── 9. Database migrations ──────────────────────────────────────
     banner("9. Running Database Migrations")
     env = {**os.environ, **{k: v for k, v in config.items()}}
-    if uv:
-        result = subprocess.run(
-            [uv, "run", "--package", "shared", "alembic", "upgrade", "head"],
-            cwd=str(ROOT), env=env
-        )
-    else:
-        result = subprocess.run(
-            [venv_python, "-m", "alembic", "upgrade", "head"],
-            cwd=str(ROOT), env=env
-        )
     if result.returncode != 0:
-        err("Migration failed. Check the error above.")
-        sys.exit(result.returncode)
+        # If it failed, it might be because the DB has an old revision ID that we deleted
+        # during consolidation. If we just restored, we should stamp it.
+        if restored:
+            warn("Migration failed. Attempting to stamp database to consolidated revision...")
+            stamp_cmd = [uv, "run", "--package", "shared", "alembic", "stamp", "001_full_schema"] if uv else [venv_python, "-m", "alembic", "stamp", "001_full_schema"]
+            result = subprocess.run(stamp_cmd, cwd=str(ROOT), env=env)
+            if result.returncode == 0:
+                ok("Database stamped to 001_full_schema. Retrying upgrade...")
+                upgrade_cmd = [uv, "run", "--package", "shared", "alembic", "upgrade", "head"] if uv else [venv_python, "-m", "alembic", "upgrade", "head"]
+                result = subprocess.run(upgrade_cmd, cwd=str(ROOT), env=env)
+
+        if result.returncode != 0:
+            err("Migration failed. Check the error above.")
+            sys.exit(result.returncode)
     ok("Database schema up to date.")
 
     # ── 10. Initial admin key ───────────────────────────────────────
@@ -532,17 +569,19 @@ def cmd_refresh():
     ok("Frontend rebuilt.")
 
     banner("3. Running Migrations")
-    if uv:
-        subprocess.run(
-            [uv, "run", "--package", "shared", "alembic", "upgrade", "head"],
-            cwd=str(ROOT)
-        )
+    upgrade_args = [uv, "run", "--package", "shared", "alembic", "upgrade", "head"] if uv else [venv_python, "-m", "alembic", "upgrade", "head"]
+    result = subprocess.run(upgrade_args, cwd=str(ROOT))
+    
+    if result.returncode != 0:
+        warn("Migration failed. Attempting to stamp and retry...")
+        stamp_args = [uv, "run", "--package", "shared", "alembic", "stamp", "001_full_schema"] if uv else [venv_python, "-m", "alembic", "stamp", "001_full_schema"]
+        subprocess.run(stamp_args, cwd=str(ROOT))
+        result = subprocess.run(upgrade_args, cwd=str(ROOT))
+
+    if result.returncode != 0:
+        err("Migrations failed to apply.")
     else:
-        subprocess.run(
-            [venv_python, "-m", "alembic", "upgrade", "head"],
-            cwd=str(ROOT)
-        )
-    ok("Migrations applied.")
+        ok("Migrations applied.")
     print(c("green", "\n  ✅ Refresh complete!\n"))
 
 
@@ -557,17 +596,21 @@ def cmd_uninstall():
         backup_config("uninstall")
 
     banner("1. Stopping Processes")
-    subprocess.run(["pkill", "-f", "launcher.main:app"], capture_output=True)
+    if sys.platform == "win32":
+        subprocess.run(["taskkill", "/IM", "python.exe", "/F"], capture_output=True)
+    else:
+        subprocess.run(["pkill", "-f", "launcher.main:app"], capture_output=True)
     ok("Standalone processes stopped (if any).")
 
-    # Stop systemd service
-    result = subprocess.run(["systemctl", "is-active", "--quiet", "unifyroute.service"], capture_output=True)
-    if result.returncode == 0:
-        subprocess.run(["sudo", "systemctl", "stop", "unifyroute.service"])
-        subprocess.run(["sudo", "systemctl", "disable", "unifyroute.service"])
-        subprocess.run(["sudo", "rm", "-f", "/etc/systemd/system/unifyroute.service"])
-        subprocess.run(["sudo", "systemctl", "daemon-reload"])
-        ok("Systemd service stopped and disabled.")
+    # Stop systemd service (Linux only)
+    if sys.platform != "win32":
+        result = subprocess.run(["systemctl", "is-active", "--quiet", "unifyroute.service"], capture_output=True)
+        if result.returncode == 0:
+            subprocess.run(["sudo", "systemctl", "stop", "unifyroute.service"])
+            subprocess.run(["sudo", "systemctl", "disable", "unifyroute.service"])
+            subprocess.run(["sudo", "rm", "-f", "/etc/systemd/system/unifyroute.service"])
+            subprocess.run(["sudo", "systemctl", "daemon-reload"])
+            ok("Systemd service stopped and disabled.")
 
     banner("2. Docker Cleanup")
     if find_docker():
