@@ -1,6 +1,7 @@
 import logging
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
+from starlette.background import BackgroundTask
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 import datetime
@@ -8,7 +9,7 @@ import litellm
 import json
 import httpx
 
-from shared.database import get_db_session
+from shared.database import get_db_session, async_session_maker
 from shared.models import GatewayKey, RequestLog
 from shared.schemas import ChatCompletionRequest, CompletionRequest
 from router.core import select_model, get_ranked_candidates
@@ -21,42 +22,29 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1", tags=["Completions"])
 
-async def log_request_bg(
-    session: AsyncSession,
-    client_key_id: str,
-    model_alias: str,
-    actual_model: str,
-    provider: str,
-    prompt_tokens: int,
-    completion_tokens: int,
-    cost_usd: float,
-    latency_ms: int,
-    status: str,
-    prompt_json: str,
-    response_text: str,
-    credential_id: str | None = None,
-):
+async def log_request_bg_task(bg_data: dict):
     try:
-        log_entry = RequestLog(
-            client_key_id=client_key_id,
-            credential_id=credential_id,
-            model_alias=model_alias,
-            actual_model=actual_model,
-            provider=provider,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            cost_usd=cost_usd,
-            latency_ms=latency_ms,
-            status=status,
-            prompt_json=prompt_json,
-            response_text=response_text
-        )
-        session.add(log_entry)
-        await session.commit()
+        async with async_session_maker() as session:
+            log_entry = RequestLog(
+                client_key_id=bg_data.get("client_key_id"),
+                credential_id=bg_data.get("credential_id"),
+                model_alias=bg_data.get("model_alias"),
+                actual_model=bg_data.get("actual_model"),
+                provider=bg_data.get("provider"),
+                prompt_tokens=bg_data.get("prompt_tokens", 0),
+                completion_tokens=bg_data.get("completion_tokens", 0),
+                cost_usd=bg_data.get("cost_usd", 0.0),
+                latency_ms=bg_data.get("latency_ms", 0),
+                status=bg_data.get("status", "unknown"),
+                prompt_json=bg_data.get("prompt_json"),
+                response_text=bg_data.get("response_text")
+            )
+            session.add(log_entry)
+            await session.commit()
     except Exception as e:
         logger.error("Failed to persist request log: %s", e)
 
-async def _stream_generator(response, start_time: float, bg_data: dict, session: AsyncSession, is_text_completion: bool = False):
+async def _stream_generator(response, start_time: float, bg_data: dict, is_text_completion: bool = False):
     """
     Generator that yields SSE chunks and logs the completed stream data.
     """
@@ -119,26 +107,18 @@ async def _stream_generator(response, start_time: float, bg_data: dict, session:
     finally:
         latency_ms = int((datetime.datetime.now().timestamp() - start_time) * 1000)
         
-        await log_request_bg(
-            session=session,
-            client_key_id=bg_data["client_key_id"],
-            model_alias=bg_data["model_alias"],
-            actual_model=bg_data["actual_model"],
-            provider=bg_data["provider"],
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            cost_usd=cost_usd,
-            latency_ms=latency_ms,
-            status=bg_data["status"],
-            prompt_json=bg_data["prompt_json"],
-            response_text=completion_text,
-            credential_id=bg_data.get("credential_id"),
-        )
+        bg_data["completion_tokens"] = completion_tokens
+        bg_data["cost_usd"] = cost_usd
+        bg_data["latency_ms"] = latency_ms
+        bg_data["response_text"] = completion_text
+        if "status" not in bg_data:
+            bg_data["status"] = "cancelled"
 
 @router.post("/chat/completions")
 async def create_chat_completion(
     request: Request,
     body: ChatCompletionRequest,
+    background_tasks: BackgroundTasks,
     key: GatewayKey = Depends(get_current_key),
     session: AsyncSession = Depends(get_db_session)
 ):
@@ -212,11 +192,11 @@ async def create_chat_completion(
 
             if body.stream:
                 return StreamingResponse(
-                    _stream_generator(response, start_time, bg_data, session, is_text_completion=False),
-                    media_type="text/event-stream"
+                    _stream_generator(response, start_time, bg_data, is_text_completion=False),
+                    media_type="text/event-stream",
+                    background=BackgroundTask(log_request_bg_task, bg_data)
                 )
             else:
-                prompt_tokens = response.usage.prompt_tokens if hasattr(response, 'usage') else 0
                 completion_tokens = response.usage.completion_tokens if hasattr(response, 'usage') else 0
                 cost_usd = (prompt_tokens * cost_in + completion_tokens * cost_out) / 1000.0
                 completion_text = response.choices[0].message.content if hasattr(response, 'choices') else ""
@@ -227,11 +207,14 @@ async def create_chat_completion(
                     provider_name, actual_model, prompt_tokens, completion_tokens, latency_ms,
                 )
                 
-                await log_request_bg(
-                    session, key.id, body.model, actual_model, provider_name,
-                    prompt_tokens, completion_tokens, cost_usd, latency_ms, "success",
-                    prompt_json, completion_text, str(credential.id)
-                )
+                bg_data.update({
+                    "completion_tokens": completion_tokens,
+                    "cost_usd": cost_usd,
+                    "latency_ms": latency_ms,
+                    "status": "success",
+                    "response_text": completion_text
+                })
+                background_tasks.add_task(log_request_bg_task, bg_data)
                 
                 # Litellm response acts like a pydantic model in many cases
                 if hasattr(response, 'model_dump'):
@@ -261,10 +244,20 @@ async def create_chat_completion(
     exhaustion_msg = config.get("exhaustion_message", "We're sorry, no models or quota are available right now.")
     logger.warning("All candidates exhausted for '%s' (%dms): %s", body.model, latency_ms, last_error)
 
-    await log_request_bg(
-        session, key.id, body.model, "unknown", "exhausted",
-        0, 0, 0.0, latency_ms, f"exhausted: {last_error}", prompt_json, exhaustion_msg
-    )
+    bg_data_fail = {
+        "client_key_id": key.id,
+        "model_alias": body.model,
+        "actual_model": "unknown",
+        "provider": "exhausted",
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0,
+        "latency_ms": latency_ms,
+        "status": f"exhausted: {last_error}",
+        "prompt_json": prompt_json,
+        "response_text": exhaustion_msg,
+        "credential_id": None
+    }
 
     msg_id = f"chatcmpl-mock-{int(datetime.datetime.now().timestamp())}"
     if body.stream:
@@ -296,8 +289,13 @@ async def create_chat_completion(
             yield f"data: {json.dumps(mock_chunk_end)}\n\n"
             yield "data: [DONE]\n\n"
             
-        return StreamingResponse(mock_stream(), media_type="text/event-stream")
+        return StreamingResponse(
+            mock_stream(), 
+            media_type="text/event-stream",
+            background=BackgroundTask(log_request_bg_task, bg_data_fail)
+        )
     else:
+        background_tasks.add_task(log_request_bg_task, bg_data_fail)
         return {
             "id": msg_id,
             "object": "chat.completion",
@@ -316,6 +314,7 @@ async def create_chat_completion(
 async def create_completion(
     request: Request,
     body: CompletionRequest,
+    background_tasks: BackgroundTasks,
     key: GatewayKey = Depends(get_current_key),
     session: AsyncSession = Depends(get_db_session)
 ):
@@ -396,11 +395,11 @@ async def create_completion(
 
             if body.stream:
                 return StreamingResponse(
-                    _stream_generator(response, start_time, bg_data, session, is_text_completion=True),
-                    media_type="text/event-stream"
+                    _stream_generator(response, start_time, bg_data, is_text_completion=True),
+                    media_type="text/event-stream",
+                    background=BackgroundTask(log_request_bg_task, bg_data)
                 )
             else:
-                prompt_tokens = response.usage.prompt_tokens if hasattr(response, 'usage') else 0
                 completion_tokens = response.usage.completion_tokens if hasattr(response, 'usage') else 0
                 cost_usd = (prompt_tokens * cost_in + completion_tokens * cost_out) / 1000.0
                 
@@ -409,11 +408,14 @@ async def create_completion(
                 
                 latency_ms = int((datetime.datetime.now().timestamp() - start_time) * 1000)
                 
-                await log_request_bg(
-                    session, key.id, body.model, actual_model, provider_name,
-                    prompt_tokens, completion_tokens, cost_usd, latency_ms, "success",
-                    prompt_json, completion_text, str(credential.id)
-                )
+                bg_data.update({
+                    "completion_tokens": completion_tokens,
+                    "cost_usd": cost_usd,
+                    "latency_ms": latency_ms,
+                    "status": "success",
+                    "response_text": completion_text
+                })
+                background_tasks.add_task(log_request_bg_task, bg_data)
                 
                 res_dict = response.model_dump() if hasattr(response, 'model_dump') else dict(response)
                 # Map message to text
@@ -445,10 +447,20 @@ async def create_completion(
     config = get_routing_config()
     exhaustion_msg = config.get("exhaustion_message", "We're sorry, no models or quota are available right now.")
 
-    await log_request_bg(
-        session, key.id, body.model, "unknown", "exhausted",
-        0, 0, 0.0, latency_ms, f"exhausted: {last_error}", prompt_json, exhaustion_msg
-    )
+    bg_data_fail = {
+        "client_key_id": key.id,
+        "model_alias": body.model,
+        "actual_model": "unknown",
+        "provider": "exhausted",
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0,
+        "latency_ms": latency_ms,
+        "status": f"exhausted: {last_error}",
+        "prompt_json": prompt_json,
+        "response_text": exhaustion_msg,
+        "credential_id": None
+    }
 
     msg_id = f"cmpl-mock-{int(datetime.datetime.now().timestamp())}"
     if body.stream:
@@ -481,8 +493,13 @@ async def create_completion(
             yield f"data: {json.dumps(mock_chunk_end)}\n\n"
             yield "data: [DONE]\n\n"
             
-        return StreamingResponse(mock_stream_text(), media_type="text/event-stream")
+        return StreamingResponse(
+            mock_stream_text(), 
+            media_type="text/event-stream",
+            background=BackgroundTask(log_request_bg_task, bg_data_fail)
+        )
     else:
+        background_tasks.add_task(log_request_bg_task, bg_data_fail)
         return {
             "id": msg_id,
             "object": "text_completion",

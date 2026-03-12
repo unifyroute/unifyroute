@@ -572,16 +572,20 @@ def cmd_install():
     # Try using uv sync --all-packages (syncs EVERY workspace member into .venv)
     uv = find_or_install_uv(venv_python)
     if uv:
-        # UV_LINK_MODE=copy avoids hardlink issues on Windows/some Linux filesystems
         env_with_uv = {**os.environ, "UV_LINK_MODE": "copy"}
-        print(f"  Installing all workspace packages via uv sync --all-packages...")
-        result = subprocess.run(uv + ["sync", "--all-packages"], cwd=str(ROOT), env=env_with_uv)
-        if result.returncode != 0:
-            warn("uv sync --all-packages had issues. Falling back to pip...")
-            uv = None
-    
-    # Pip fallback if uv is unavailable
-    if not uv:
+        print(f"  Installing packages explicitly via uv pip install...")
+        # uv sync can be flaky on some setups due to workspace members not linking correctly
+        # Fallback to explicit explicit uv pip install for all members.
+        for package_dir in ["shared", "api-gateway", "router", "launcher", "credential-vault", "quota-poller"]:
+            pkg_path = ROOT / package_dir
+            if pkg_path.exists():
+                print(f"    Installing {package_dir}...")
+                subprocess.run(uv + ["pip", "install", "--python", venv_python, "-e", str(pkg_path)], cwd=str(ROOT), env=env_with_uv, check=False)
+        
+        print(f"    Installing core dependencies...")
+        subprocess.run(uv + ["pip", "install", "--python", venv_python, "uvicorn", "fastapi", "sqlalchemy", "alembic", "litellm", "httpx"], cwd=str(ROOT), env=env_with_uv, check=False)
+
+    else:
         print(f"  Installing packages via pip into venv...")
         for package_dir in ["shared", "api-gateway", "router", "launcher", "credential-vault", "quota-poller"]:
             pkg_path = ROOT / package_dir
@@ -596,7 +600,7 @@ def cmd_install():
         
         print(f"    Installing core dependencies...")
         subprocess.run(
-            [venv_python, "-m", "pip", "install", "-q", "uvicorn", "fastapi", "sqlalchemy", "alembic"],
+            [venv_python, "-m", "pip", "install", "-q", "uvicorn", "fastapi", "sqlalchemy", "alembic", "litellm", "httpx"],
             cwd=str(ROOT), check=False
         )
     
@@ -685,16 +689,18 @@ def cmd_refresh():
     
     uv = find_or_install_uv(venv_python)
     if uv:
-        # Set UV_LINK_MODE=copy to avoid hardlink issues on Windows
         env_with_uv = {**os.environ, "UV_LINK_MODE": "copy"}
-        print(f"  Installing via uv sync...")
-        result = subprocess.run(uv + ["sync"], cwd=str(ROOT), env=env_with_uv)
-        if result.returncode != 0:
-            warn("uv sync had issues. Falling back to pip...")
-            uv = None
-    
-    # Always ensure all packages are in venv
-    if not uv:
+        print(f"  Installing packages explicitly via uv pip install...")
+        for package_dir in ["shared", "api-gateway", "router", "launcher", "credential-vault", "quota-poller"]:
+            pkg_path = ROOT / package_dir
+            if pkg_path.exists():
+                print(f"    Installing {package_dir}...")
+                subprocess.run(uv + ["pip", "install", "--python", venv_python, "-e", str(pkg_path)], cwd=str(ROOT), env=env_with_uv, check=False)
+        
+        print(f"    Installing core dependencies...")
+        subprocess.run(uv + ["pip", "install", "--python", venv_python, "uvicorn", "fastapi", "sqlalchemy", "alembic", "litellm", "httpx"], cwd=str(ROOT), env=env_with_uv, check=False)
+
+    else:
         print(f"  Installing packages via pip into venv...")
         for package_dir in ["shared", "api-gateway", "router", "launcher", "credential-vault", "quota-poller"]:
             pkg_path = ROOT / package_dir
@@ -707,12 +713,10 @@ def cmd_refresh():
                 if result.returncode != 0:
                     warn(f"Failed to install {package_dir}, but continuing...")
         
-        # Ensure core dependencies
         print(f"    Installing core dependencies...")
         subprocess.run(
-            [venv_python, "-m", "pip", "install", "-q", "uvicorn", "fastapi", "sqlalchemy", "alembic"],
-            cwd=str(ROOT),
-            check=False
+            [venv_python, "-m", "pip", "install", "-q", "uvicorn", "fastapi", "sqlalchemy", "alembic", "litellm", "httpx"],
+            cwd=str(ROOT), check=False
         )
     
     ok("Python dependencies installed in virtual environment.")

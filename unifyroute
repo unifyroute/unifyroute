@@ -79,7 +79,8 @@ def _find_uv() -> list[str]:
             pass
 
     if not uv:
-        home_uv = Path.home() / ".local" / "bin" / "uv"
+        uv_name = "uv.exe" if sys.platform == "win32" else "uv"
+        home_uv = Path.home() / ".local" / "bin" / uv_name
         if home_uv.exists():
             uv = [str(home_uv)]
 

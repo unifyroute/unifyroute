@@ -86,7 +86,6 @@ class ProviderAdapter:
         import os
         api_key = decrypt_secret(credential.secret_enc, credential.iv)
         model_str = f"{self.litellm_prefix}/{model}"
-        logger.info("Adapter chat: provider=%s model=%s stream=%s", self.provider_name, model, stream)
 
         litellm.drop_params = True
 
@@ -101,25 +100,37 @@ class ProviderAdapter:
                 default_base = None
             api_base = os.environ.get(f"PROVIDER_{pname}_BASE_URL") or credential.provider.base_url or default_base
 
-        # For OAuth2 tokens (Google Antigravity / Gemini), pass as token not api_key
-        if credential.auth_type == "oauth2":
-            return await litellm.acompletion(
-                model=model_str,
-                messages=messages,
-                api_key=api_key,   # litellm accepts Bearer token as api_key for gemini
-                api_base=api_base,
-                stream=stream,
-                **kwargs
-            )
-
-        return await litellm.acompletion(
-            model=model_str,
-            messages=messages,
-            api_key=api_key,
-            api_base=api_base,
-            stream=stream,
-            **kwargs
+        logger.info(
+            "🚀 OUTBOUND REQUEST: provider=[%s] model=[%s] target_model=[%s] api_base=[%s] stream=[%s]", 
+            self.provider_name, model, model_str, api_base or 'default', stream
         )
+
+        try:
+            # For OAuth2 tokens (Google Antigravity / Gemini), pass as token not api_key
+            if credential.auth_type == "oauth2":
+                response = await litellm.acompletion(
+                    model=model_str,
+                    messages=messages,
+                    api_key=api_key,   # litellm accepts Bearer token as api_key for gemini
+                    api_base=api_base,
+                    stream=stream,
+                    **kwargs
+                )
+            else:
+                response = await litellm.acompletion(
+                    model=model_str,
+                    messages=messages,
+                    api_key=api_key,
+                    api_base=api_base,
+                    stream=stream,
+                    **kwargs
+                )
+            logger.info("✅ SUCCESS: provider=[%s] model=[%s] stream=[%s]", self.provider_name, model, stream)
+            return response
+        except Exception as e:
+            logger.error("❌ FAILED: provider=[%s] model=[%s] target_model=[%s] stream=[%s] | Error: %s", 
+                         self.provider_name, model, model_str, stream, str(e))
+            raise e
 
     # ------------------------------------------------------------------
     # list_models — provider-specific implementations below

@@ -32,7 +32,7 @@ def _configure_loggers():
     root_logger.setLevel(logging.INFO)
     root_logger.handlers = [console_handler]
     
-    for name in ["launcher", "api_gateway", "router", "shared", "credential_vault", "uvicorn", "uvicorn.error", "uvicorn.access"]:
+    for name in ["launcher", "api_gateway", "router", "shared", "credential_vault", "uvicorn", "uvicorn.error", "uvicorn.access", "litellm", "httpx"]:
         l = logging.getLogger(name)
         l.setLevel(logging.INFO)
         l.handlers = [console_handler]
