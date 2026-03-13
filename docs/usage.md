@@ -1,6 +1,35 @@
-# Usage & Commands Reference
+# UnifyRoute — Usage & CLI Reference
 
-Complete reference for all CLI scripts, API endpoints, admin tasks, and operational procedures.
+Complete reference for all CLI commands, API endpoints, admin tasks, and operational procedures.
+
+## CLI Quick Reference
+
+```bash
+# Setup & lifecycle
+./unifyroute setup              # First-time interactive setup
+./unifyroute setup refresh      # Re-sync deps, rebuild GUI, run migrations
+./unifyroute setup uninstall    # Remove local files
+./unifyroute wizard             # Interactive provider/routing wizard
+
+./unifyroute start              # Start gateway (background)
+./unifyroute stop               # Stop gateway
+./unifyroute restart            # Restart gateway
+
+# Token management
+./unifyroute get token [all|admin|api]
+./unifyroute create token [admin|api]
+./unifyroute update token <id> <new-label>
+
+# Credential operations
+./unifyroute import-keys <file.json>
+
+./unifyroute help               # Show all commands
+```
+
+> **Windows**: replace `./unifyroute` with `unifyroute.bat` or `python unifyroute`.
+
+---
+
 
 ---
 

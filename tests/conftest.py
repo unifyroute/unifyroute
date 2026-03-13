@@ -84,3 +84,51 @@ def raw_client() -> httpx.Client:
     """Unauthenticated client for testing auth rejection."""
     with httpx.Client(base_url=BASE_URL, timeout=10) as client:
         yield client
+
+
+# ──────────────────────────────────────────────────────────────────
+# Fixtures – Mock / Temporary state
+# ──────────────────────────────────────────────────────────────────
+
+@pytest.fixture(scope="module")
+def mock_streaming_provider(admin_client: httpx.Client):
+    """
+    Creates a temporary provider, credential, and model mapped to 'lite'
+    tier, pointing base_url to http://localhost:9999/v1 for testing 
+    streaming failure cases or mock backends. Cleans up after the module.
+    """
+    import uuid
+    prov_name = f"mock-stream-{uuid.uuid4().hex[:6]}"
+    
+    r_prov = admin_client.post("/api/admin/providers", json={
+        "name": prov_name,
+        "display_name": "Mock Streaming Provider",
+        "auth_type": "api_key",
+        "base_url": "http://localhost:9999/v1",
+        "enabled": True
+    })
+    r_prov.raise_for_status()
+    prov_id = r_prov.json()["id"]
+
+    r_cred = admin_client.post("/api/admin/credentials", json={
+        "provider_id": prov_id,
+        "label": "mock-api-key",
+        "secret_key": "sk-mock-doesntexist",
+        "enabled": True
+    })
+    r_cred.raise_for_status()
+
+    r_mod = admin_client.post("/api/admin/models", json={
+        "provider_id": prov_id,
+        "model_id": "openai/gpt-mock-stream",
+        "tier": "lite",
+        "cost_in_1m": 0.5,
+        "cost_out_1m": 1.5,
+        "enabled": True
+    })
+    r_mod.raise_for_status()
+    
+    yield r_prov.json()
+    
+    # cleanup
+    admin_client.delete(f"/api/admin/providers/{prov_id}")

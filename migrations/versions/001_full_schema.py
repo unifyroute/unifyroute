@@ -4,13 +4,15 @@ Revision ID: 001_full_schema
 Revises:
 Create Date: 2026-03-09 00:00:00.000000
 
-This is a single consolidated migration that creates the complete UnifyRoute
-database schema from scratch.  It replaces all previous incremental migrations:
+This is the single consolidated migration that creates the complete UnifyRoute
+database schema from scratch.  It supersedes all previous incremental migrations:
   - 001_consolidated_schema (7 core tables)
   - e7e89709f21c (chat_sessions, chat_messages)
   - b84eb3d51464 (rate_limit_rpm on gateway_keys)
   - 0a5746722fe4 (routing_configs)
   - bdcc5219d5d3 (prompt_json, response_text on request_logs)
+  - 50c0fa74a505 (chat_sessions/messages – no-op, already present above)
+  - 212342e9d042 (status, error_message on credentials)
 """
 from typing import Sequence, Union
 
@@ -84,6 +86,8 @@ def upgrade() -> None:
         sa.Column("oauth_meta", sa.JSON(), nullable=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("enabled", sa.Boolean(), nullable=False),
+        sa.Column("status", sa.Text(), nullable=True),          # e.g. "ok", "error", "unverified"
+        sa.Column("error_message", sa.Text(), nullable=True),
         sa.ForeignKeyConstraint(["provider_id"], ["providers.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )

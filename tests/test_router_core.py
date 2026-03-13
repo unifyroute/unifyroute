@@ -110,3 +110,20 @@ def test_auto_select_tier_high_max_tokens_thinking():
     """Requesting many tokens -> thinking tier."""
     req = _make_request("Summarize this", num_messages=1, max_tokens=5000)
     assert _auto_select_tier(req) == "thinking"
+
+
+# ── LiteLLM Error Mocking ────────────────────────────────────────────────
+
+def test_litellm_ratelimit_error_instantiation():
+    """Verify LiteLLM rate limit error shapes for adapter parsing."""
+    import litellm
+    try:
+        raise litellm.RateLimitError(
+            message=b'{\n  "error": {\n    "code": 429,\n    "message": "Quota exceeded"\n  }\n}',
+            model="gemini-3-pro",
+            llm_provider="gemini",
+            response=""
+        )
+    except Exception as e:
+        assert isinstance(e, litellm.RateLimitError)
+        assert hasattr(e, "message")
