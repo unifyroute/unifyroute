@@ -32,6 +32,7 @@ _PROVIDER_SEED = [
     {"name": "nvidia",          "display_name": "NVIDIA NIM",             "auth_type": "api_key", "enabled": True},
     {"name": "unifyroute",      "display_name": "UnifyRouter",             "auth_type": "api_key", "enabled": True},
     {"name": "ollama",          "display_name": "Ollama (local)",         "auth_type": "api_key", "enabled": True},
+    {"name": "ollama-cloud",    "display_name": "Ollama Cloud",           "auth_type": "api_key", "enabled": True},
     {"name": "zai",             "display_name": "Z.AI",                   "auth_type": "api_key", "enabled": True},
     {"name": "litellm",         "display_name": "LiteLLM",                "auth_type": "api_key", "enabled": True},
     {"name": "vllm",            "display_name": "vLLM (self-hosted)",     "auth_type": "api_key", "enabled": True},
