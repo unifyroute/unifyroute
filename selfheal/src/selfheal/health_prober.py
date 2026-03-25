@@ -21,6 +21,7 @@ from shared.database import async_session_maker
 from shared.models import Credential, Provider, ProviderModel
 from router.quota import get_redis, mark_provider_failed, is_provider_failed
 from router.adapters import get_adapter
+from shared.events import log_event_isolated
 
 from selfheal.adaptive_cooldown import reset_failure_count
 from selfheal.incident_tracker import close_circuit
@@ -147,11 +148,27 @@ async def _probe_single_provider(cred: Credential, provider_name: str, probe_mod
             # Close circuit breaker
             from selfheal.incident_tracker import close_circuit
             await close_circuit(cred.id, probe_model.model_id)
+            
+            await log_event_isolated(
+                level="INFO",
+                component="selfheal",
+                event_type="provider_recovered",
+                message=f"Provider {provider_name}/{probe_model.model_id} recovered (latency {latency_ms}ms).",
+                details={"credential_id": str(cred.id), "model": probe_model.model_id, "latency_ms": latency_ms}
+            )
     else:
         logger.warning(
             "Provider UNHEALTHY: %s/%s (latency=%dms): %s",
             provider_name, probe_model.model_id, latency_ms,
             error_msg[:200] if error_msg else "health check failed",
+        )
+        # We only log critical if it fails when it was healthy, but without state here just emit warning
+        await log_event_isolated(
+            level="WARNING",
+            component="selfheal",
+            event_type="health_probe_failed",
+            message=f"Probe failed for {provider_name}/{probe_model.model_id}.",
+            details={"error": error_msg, "latency_ms": latency_ms, "model": probe_model.model_id}
         )
 
     return {"ok": ok, "recovered": recovered}

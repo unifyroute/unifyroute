@@ -9,6 +9,7 @@ import os
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from pythonjsonlogger import jsonlogger
 
 
 _CONFIGURED = False
@@ -54,7 +55,14 @@ def setup_logging(
     level_name = (level or os.environ.get("LOG_LEVEL", "INFO")).upper()
     log_level = getattr(logging, level_name, logging.INFO)
 
-    formatter = logging.Formatter(_LOG_FORMAT, datefmt=_LOG_DATE_FORMAT)
+    cli_formatter = logging.Formatter(_LOG_FORMAT, datefmt=_LOG_DATE_FORMAT)
+    
+    # JSON formatter for file logs
+    json_formatter = jsonlogger.JsonFormatter(
+        "%(asctime)s %(levelname)s %(name)s %(message)s",
+        datefmt=_LOG_DATE_FORMAT,
+        rename_fields={"levelname": "level"}
+    )
 
     # ── Console handler (stdout) — only when running interactively ──────
     # When the CLI daemonizes the server, stdout is redirected to app.log.
@@ -62,27 +70,27 @@ def setup_logging(
     # the same file (once from the file handler, once from console → file).
     if sys.stdout.isatty():
         console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(formatter)
+        console_handler.setFormatter(cli_formatter)
         console_handler.setLevel(log_level)
 
-    # ── Application file handler (logs/app.log) ───────────────────────
+    # ── Application file handler (logs/app.jsonl) ───────────────────────
     app_file_handler = RotatingFileHandler(
-        str(log_path / "app.log"),
+        str(log_path / "app.jsonl"),
         maxBytes=10 * 1024 * 1024,  # 10 MB
         backupCount=5,
         encoding="utf-8",
     )
-    app_file_handler.setFormatter(formatter)
+    app_file_handler.setFormatter(json_formatter)
     app_file_handler.setLevel(log_level)
 
-    # ── Access file handler (logs/access.log) ─────────────────────────
+    # ── Access file handler (logs/access.jsonl) ─────────────────────────
     access_file_handler = RotatingFileHandler(
-        str(log_path / "access.log"),
+        str(log_path / "access.jsonl"),
         maxBytes=10 * 1024 * 1024,
         backupCount=3,
         encoding="utf-8",
     )
-    access_file_handler.setFormatter(formatter)
+    access_file_handler.setFormatter(json_formatter)
     access_file_handler.setLevel(logging.INFO)
 
     # ── Root logger — receives everything via propagation ─────────────
@@ -131,6 +139,6 @@ def setup_logging(
     logger.info(
         "Logging configured: level=%s, app_log=%s, access_log=%s",
         level_name,
-        log_path / "app.log",
-        log_path / "access.log",
+        log_path / "app.jsonl",
+        log_path / "access.jsonl",
     )

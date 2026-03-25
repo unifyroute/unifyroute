@@ -629,6 +629,7 @@ Commands:
   restart                             Restart the application
   clean-start                         Stop everything, archive logs, start fresh
   doctor                              Run diagnostics and auto-heal common issues
+  logs                                View and search system event logs
   get token [all|admin|api]           List API tokens (requires master password)
   create token [admin|api]            Create a new API token (requires master password)
   update token <id> <label>           Update a token's label (requires master password)
@@ -643,6 +644,7 @@ Examples:
   ./unifyroute start                  Start the app
   ./unifyroute clean-start            Stop stale processes, archive logs, start fresh
   ./unifyroute doctor                 Check system health, auto-fix issues
+  ./unifyroute logs --level ERROR     View recent system errors
   ./unifyroute get token              List all tokens
   ./unifyroute create token admin     Create an admin token
 """
@@ -681,6 +683,9 @@ def main():
 
     elif cmd == "doctor":
         cmd_doctor()
+
+    elif cmd == "logs":
+        _uv_run(["--package", "shared", "python", "scripts/list-logs.py"] + rest)
 
     elif cmd == "get":
         if rest and rest[0] == "token":

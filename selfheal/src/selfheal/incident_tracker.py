@@ -13,6 +13,7 @@ from enum import Enum
 from typing import Optional
 from uuid import UUID
 
+from shared.events import log_event_isolated
 from router.quota import get_redis
 
 logger = logging.getLogger("selfheal.incident_tracker")
@@ -204,6 +205,13 @@ async def _open_circuit(credential_id: UUID, model_id: str) -> None:
             credential_id, model_id,
             CIRCUIT_OPEN_THRESHOLD, INCIDENT_WINDOW_SECONDS,
             CIRCUIT_HALF_OPEN_AFTER_SECONDS,
+        )
+        await log_event_isolated(
+            level="ERROR",
+            component="selfheal",
+            event_type="circuit_open",
+            message=f"Circuit opened for {credential_id}/{model_id} after {CIRCUIT_OPEN_THRESHOLD} failures.",
+            details={"credential_id": str(credential_id), "model_id": model_id, "window_sec": INCIDENT_WINDOW_SECONDS}
         )
     except Exception as e:
         logger.error("Failed to open circuit: %s", e)

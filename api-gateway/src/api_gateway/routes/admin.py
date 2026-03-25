@@ -767,6 +767,65 @@ async def get_logs(
         ]
     }
 
+@router.get("/system-logs")
+async def get_system_logs(
+    limit: int = 50,
+    offset: int = 0,
+    search: Optional[str] = None,
+    component: Optional[str] = None,
+    level: Optional[str] = None,
+    key: GatewayKey = Depends(require_admin_key),
+    session: AsyncSession = Depends(get_db_session)
+):
+    from shared.models import SystemEvent
+    from sqlalchemy import or_, func
+    
+    stmt_base = select(SystemEvent)
+    
+    filters = []
+    if component:
+        filters.append(SystemEvent.component == component)
+    if level:
+        filters.append(SystemEvent.level == level.upper())
+    if search:
+        search_filter = f"%{search}%"
+        # Using basic LIKE on message for sqlite compatibility
+        filters.append(SystemEvent.message.ilike(search_filter))
+        
+    if filters:
+        stmt_base = stmt_base.where(*filters)
+        
+    count_stmt = select(func.count(SystemEvent.id))
+    if filters:
+        count_stmt = count_stmt.where(*filters)
+        
+    total_records = await session.execute(count_stmt)
+    total = total_records.scalar_one()
+
+    stmt = stmt_base.order_by(SystemEvent.timestamp.desc()).offset(offset).limit(limit)
+    result = await session.execute(stmt)
+    records = result.scalars().all()
+    
+    return {
+        "total": total,
+        "page": offset // limit + 1,
+        "items": [
+            {
+                "id": str(r.id),
+                "timestamp": (
+                    r.timestamp.replace(tzinfo=None).isoformat() + "Z"
+                    if r.timestamp.tzinfo is not None
+                    else r.timestamp.isoformat() + "Z"
+                ),
+                "level": r.level,
+                "component": r.component,
+                "event_type": r.event_type,
+                "message": r.message,
+                "details": r.details
+            } for r in records
+        ]
+    }
+
 @router.get("/models", response_model=List[ModelResponse])
 async def list_admin_models(
     key: GatewayKey = Depends(require_admin_key), 
