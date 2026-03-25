@@ -48,5 +48,9 @@ async_session_maker = async_sessionmaker(engine, expire_on_commit=False, class_=
 
 async def get_db_session():
     """Dependency for FastAPI endpoints yielding an HTTP-request scoped Session."""
-    async with async_session_maker() as session:
-        yield session
+    try:
+        async with async_session_maker() as session:
+            yield session
+    except Exception as e:
+        logger.error("Database session error: %s", e, exc_info=True)
+        raise
