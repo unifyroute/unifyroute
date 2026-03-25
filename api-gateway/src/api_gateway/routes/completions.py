@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, Request, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -278,55 +278,8 @@ async def create_chat_completion(
         "credential_id": None
     }
 
-    msg_id = f"chatcmpl-mock-{int(datetime.datetime.now().timestamp())}"
-    if body.stream:
-        async def mock_stream():
-            mock_chunk = {
-                "id": msg_id,
-                "object": "chat.completion.chunk",
-                "created": int(datetime.datetime.now().timestamp()),
-                "model": body.model,
-                "choices": [{
-                    "index": 0,
-                    "delta": {"role": "assistant", "content": exhaustion_msg},
-                    "finish_reason": None
-                }]
-            }
-            yield f"data: {json.dumps(mock_chunk)}\n\n"
-            
-            mock_chunk_end = {
-                "id": msg_id,
-                "object": "chat.completion.chunk",
-                "created": int(datetime.datetime.now().timestamp()),
-                "model": body.model,
-                "choices": [{
-                    "index": 0,
-                    "delta": {},
-                    "finish_reason": "stop"
-                }]
-            }
-            yield f"data: {json.dumps(mock_chunk_end)}\n\n"
-            yield "data: [DONE]\n\n"
-            
-        return StreamingResponse(
-            mock_stream(), 
-            media_type="text/event-stream",
-            background=BackgroundTask(log_request_bg_task, bg_data_fail)
-        )
-    else:
-        background_tasks.add_task(log_request_bg_task, bg_data_fail)
-        return {
-            "id": msg_id,
-            "object": "chat.completion",
-            "created": int(datetime.datetime.now().timestamp()),
-            "model": body.model,
-            "choices": [{
-                "index": 0,
-                "message": {"role": "assistant", "content": exhaustion_msg},
-                "finish_reason": "stop"
-            }],
-            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-        }
+    background_tasks.add_task(log_request_bg_task, bg_data_fail)
+    raise HTTPException(status_code=503, detail=f"Model routing failed: {last_error}")
 
 
 @router.post("/completions")
@@ -480,54 +433,5 @@ async def create_completion(
         "credential_id": None
     }
 
-    msg_id = f"cmpl-mock-{int(datetime.datetime.now().timestamp())}"
-    if body.stream:
-        async def mock_stream_text():
-            mock_chunk = {
-                "id": msg_id,
-                "object": "text_completion",
-                "created": int(datetime.datetime.now().timestamp()),
-                "model": body.model,
-                "choices": [{
-                    "text": exhaustion_msg,
-                    "index": 0,
-                    "logprobs": None,
-                    "finish_reason": None
-                }]
-            }
-            yield f"data: {json.dumps(mock_chunk)}\n\n"
-            mock_chunk_end = {
-                "id": msg_id,
-                "object": "text_completion",
-                "created": int(datetime.datetime.now().timestamp()),
-                "model": body.model,
-                "choices": [{
-                    "text": "",
-                    "index": 0,
-                    "logprobs": None,
-                    "finish_reason": "stop"
-                }]
-            }
-            yield f"data: {json.dumps(mock_chunk_end)}\n\n"
-            yield "data: [DONE]\n\n"
-            
-        return StreamingResponse(
-            mock_stream_text(), 
-            media_type="text/event-stream",
-            background=BackgroundTask(log_request_bg_task, bg_data_fail)
-        )
-    else:
-        background_tasks.add_task(log_request_bg_task, bg_data_fail)
-        return {
-            "id": msg_id,
-            "object": "text_completion",
-            "created": int(datetime.datetime.now().timestamp()),
-            "model": body.model,
-            "choices": [{
-                "text": exhaustion_msg,
-                "index": 0,
-                "logprobs": None,
-                "finish_reason": "stop"
-            }],
-            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-        }
+    background_tasks.add_task(log_request_bg_task, bg_data_fail)
+    raise HTTPException(status_code=503, detail=f"Model routing failed: {last_error}")

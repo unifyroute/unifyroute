@@ -81,6 +81,13 @@ async def brain_status(
     return {"brain_providers": items, "total": len(items)}
 
 
+@router.get("/health")
+async def brain_health_check(
+    key: GatewayKey = Depends(require_admin_key),
+):
+    return {"status": "ok"}
+
+
 @router.post("/providers", response_model=BrainProviderAssignResponse)
 async def brain_assign_provider(
     data: BrainProviderAssign,

@@ -90,3 +90,7 @@ app.include_router(chat_router)
 @app.get("/")
 async def root():
     return {"message": "LLM Gateway API is running"}
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}

@@ -51,7 +51,13 @@ async def check_endpoint(
         return HealthResult(ok=True, latency_ms=latency, status_code=r.status_code, message="OK")
     except Exception as exc:
         latency = int((time.monotonic() - start) * 1000)
-        return HealthResult(ok=False, latency_ms=latency, message=brain_safe_message(exc))
+        status_code = getattr(exc, "status_code", 0)
+        if str(exc).startswith("HTTP "):
+            try:
+                status_code = int(str(exc).split(" ")[1].strip(":"))
+            except Exception:
+                pass
+        return HealthResult(ok=False, latency_ms=latency, status_code=status_code, message=brain_safe_message(exc))
 
 
 async def check_provider_health(
