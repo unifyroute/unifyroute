@@ -90,3 +90,22 @@ app.include_router(chat_router)
 @app.get("/")
 async def root():
     return {"message": "LLM Gateway API is running"}
+
+@app.get("/health")
+async def health_check():
+    """Health check with self-healing system status."""
+    try:
+        from selfheal.incident_tracker import get_incident_summary
+        from selfheal.health_prober import get_health_summary
+        incidents = await get_incident_summary()
+        health = await get_health_summary()
+        return {
+            "status": "ok",
+            "self_healing": {
+                "incidents": incidents,
+                "provider_health": health,
+            },
+        }
+    except Exception as e:
+        logger.warning("Self-healing status unavailable: %s", e)
+        return {"status": "ok", "self_healing": "unavailable"}

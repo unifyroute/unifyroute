@@ -7,6 +7,7 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn>=0.31.0",
     "router",
+    "selfheal",
     "shared",
     "brain",
     "pyjwt>=2.11.0",
@@ -20,3 +21,4 @@ build-backend = "hatchling.build"
 router = { workspace = true }
 shared = { workspace = true }
 brain = { workspace = true }
+selfheal = { workspace = true }

@@ -55,6 +55,7 @@ async def create_session(
     session.add(db_session)
     await session.commit()
     await session.refresh(db_session)
+    logger.info("Chat session created: id=%s topic=%s", db_session.id, req.topic)
     return {
         "id": str(db_session.id),
         "topic": db_session.topic,
@@ -108,6 +109,7 @@ async def delete_session(
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Session not found")
     await session.commit()
+    logger.info("Chat session deleted: id=%s", session_id)
     return {"status": "success"}
 
 
@@ -119,6 +121,7 @@ async def delete_all_sessions(
     """Delete all chat sessions."""
     await session.execute(delete(ChatSession))
     await session.commit()
+    logger.info("All chat sessions deleted")
     return {"status": "success"}
 
 
@@ -146,6 +149,7 @@ async def add_message(
     session.add(msg)
     await session.commit()
     await session.refresh(msg)
+    logger.info("Chat message added: session=%s role=%s len=%d", session_id, req.role, len(req.content))
 
     return {
         "id": str(msg.id),

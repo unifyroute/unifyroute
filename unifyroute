@@ -204,28 +204,97 @@ def cmd_wizard():
 def cmd_start():
     """Start the UnifyRoute unified launcher."""
     import shutil
+    import time
     print("🚀  Starting UnifyRoute...")
 
-    # Check if .env exists
+    # ── 1. Validate .env ──────────────────────────────────────────────
     env_file = SCRIPT_DIR / ".env"
     if not env_file.exists():
         _die(f".env file not found at {env_file}. Run './unifyroute setup' first.")
 
-    # Load environment variables from .env file
     _load_env()
-
-    # Ensure log dir exists
-    log_dir = SCRIPT_DIR / "logs"
-    log_dir.mkdir(exist_ok=True)
 
     port = os.environ.get("PORT", "6565")
     host = os.environ.get("HOST", "0.0.0.0")
-    log_file = log_dir / "api.log"
+
+    # ── 2. Stop any existing processes on the port ────────────────────
+    _info("Stopping any existing UnifyRoute processes...")
+    _stop_server()
+    time.sleep(0.5)
+
+    # ── 3. Ensure Docker daemon + Redis are running ─────────────────────
+    docker = shutil.which("docker")
+    if docker:
+        # Check if Docker daemon is running
+        daemon_check = subprocess.run(
+            [docker, "info"],
+            capture_output=True, text=True,
+        )
+        if daemon_check.returncode != 0:
+            _info("Docker daemon is not running. Starting Docker...")
+            if sys.platform != "win32":
+                start_result = subprocess.run(
+                    ["sudo", "systemctl", "start", "docker"],
+                    capture_output=True, text=True,
+                )
+                if start_result.returncode == 0:
+                    _ok("Docker daemon started.")
+                    time.sleep(2)  # Wait for daemon to be ready
+                else:
+                    print(f"  ⚠️  Could not start Docker daemon: {start_result.stderr.strip()}")
+                    print("      Start Docker manually: sudo systemctl start docker")
+            else:
+                print("  ⚠️  Docker daemon is not running. Please start Docker Desktop.")
+
+        _info("Ensuring Redis is running...")
+        result = subprocess.run(
+            [docker, "compose", "up", "-d", "redis"],
+            cwd=str(SCRIPT_DIR),
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            _ok("Redis is running.")
+        else:
+            print(f"  ⚠️  Could not start Redis: {result.stderr.strip()}")
+            print("      Quota tracking and failover will be limited.")
+    else:
+        print("  ⚠️  Docker not found — Redis must be started manually.")
+        print("      Run: docker compose up -d redis")
+
+    # ── 4. Verify virtual environment exists ──────────────────────────
+    venv_dir = SCRIPT_DIR / ".venv"
+    if not venv_dir.exists():
+        _die("Virtual environment not found. Run './unifyroute setup' first.")
+
+    # ── 4. Auto-build GUI if dist/ is missing ─────────────────────────
+    gui_dist = SCRIPT_DIR / "gui" / "dist"
+    if not gui_dist.exists():
+        _info("GUI build not found. Building automatically...")
+        npm = shutil.which("npm")
+        if not npm:
+            _die("'npm' not found. Please install Node.js or run './unifyroute setup'.")
+        gui_dir = SCRIPT_DIR / "gui"
+        node_modules = gui_dir / "node_modules"
+        if not node_modules.exists():
+            _info("Installing frontend dependencies...")
+            result = subprocess.run([npm, "install"], cwd=str(gui_dir))
+            if result.returncode != 0:
+                _die("npm install failed. Check the error above.")
+        _info("Building frontend...")
+        result = subprocess.run([npm, "run", "build"], cwd=str(gui_dir))
+        if result.returncode != 0:
+            _die("Frontend build failed. Check the error above.")
+        _ok("Frontend built successfully.")
+
+    # ── 5. Ensure log dir exists ──────────────────────────────────────
+    log_dir = SCRIPT_DIR / "logs"
+    log_dir.mkdir(exist_ok=True)
+    log_file = log_dir / "app.log"
 
     print(f"ℹ️   Launcher starting on {host}:{port}")
-    print(f"ℹ️   Logs → {log_file}")
+    print(f"ℹ️   Logs → {log_dir}")
 
-    # Use uv run if available
+    # ── 6. Launch the server ──────────────────────────────────────────
     uv = _find_uv()
     if uv:
         cmd = uv + [
@@ -233,58 +302,20 @@ def cmd_start():
             "--app-dir", "launcher/src",
             "launcher.main:app", "--port", port, "--host", host
         ]
-        
-        with open(log_file, "a") as lf:
-            proc = subprocess.Popen(
-                cmd,
-                cwd=str(SCRIPT_DIR),
-                stdout=lf,
-                stderr=subprocess.STDOUT,
-                env=os.environ.copy(),
-            )
-        _ok(f"UnifyRoute started (PID {proc.pid}). Logs → {log_file.name}")
-        _info(f"Open: http://localhost:{port}")
-        return
-
-    # Fallback to direct python run if uv isn't found
-    if sys.platform == "win32":
-        python = SCRIPT_DIR / ".venv" / "Scripts" / "python.exe"
     else:
-        python = SCRIPT_DIR / ".venv" / "bin" / "python"
+        if sys.platform == "win32":
+            python = SCRIPT_DIR / ".venv" / "Scripts" / "python.exe"
+        else:
+            python = SCRIPT_DIR / ".venv" / "bin" / "python"
 
-    if not python.exists():
-        _die("Virtual environment not found. Run './unifyroute setup' first.")
+        if not python.exists():
+            _die("Python not found in .venv. Run './unifyroute setup' first.")
 
-    # Verify required packages are installed in the venv fallback
-    check_venv_modules = [
-        "uvicorn", "fastapi", "api_gateway", "launcher", "shared", "router"
-    ]
-    
-    missing_modules = []
-    for module in check_venv_modules:
-        result = subprocess.run(
-            [str(python), "-c", f"import {module}"],
-            capture_output=True,
-            text=True
-        )
-        if result.returncode != 0:
-            missing_modules.append(module)
-    
-    if missing_modules:
-        _die(
-            f"Missing Python packages in virtual environment: {', '.join(missing_modules)}\n"
-            f"Run './unifyroute setup' to install dependencies."
-        )
-
-    # Run uvicorn directly via the venv's python with full environment
-    cmd = [
-        str(python), "-m", "uvicorn", 
-        "--app-dir", "launcher/src",
-        "launcher.main:app", "--port", port, "--host", host
-    ]
-
-    # Pass environment variables from .env to the subprocess
-    launcher_env = os.environ.copy()
+        cmd = [
+            str(python), "-m", "uvicorn",
+            "--app-dir", "launcher/src",
+            "launcher.main:app", "--port", port, "--host", host
+        ]
 
     with open(log_file, "a") as lf:
         proc = subprocess.Popen(
@@ -292,10 +323,43 @@ def cmd_start():
             cwd=str(SCRIPT_DIR),
             stdout=lf,
             stderr=subprocess.STDOUT,
-            env=launcher_env,
+            env=os.environ.copy(),
         )
-    _ok(f"UnifyRoute started (PID {proc.pid}). Logs → {log_file.name}")
-    _info(f"Open: http://localhost:{port}")
+
+    # ── 7. Health check — wait for server to respond ──────────────────
+    _info("Waiting for server to start...")
+    health_url = f"http://localhost:{port}/api/health"
+    max_wait = 15  # seconds
+    started = False
+    for i in range(max_wait * 2):
+        time.sleep(0.5)
+        # Check the process is still alive
+        if proc.poll() is not None:
+            # Process exited — read last few lines of log for context
+            print()
+            _die(
+                f"Server process exited with code {proc.returncode}.\n"
+                f"         Check {log_file} for details."
+            )
+        try:
+            import urllib.request
+            resp = urllib.request.urlopen(health_url, timeout=2)
+            if resp.status == 200:
+                started = True
+                break
+        except Exception:
+            pass
+
+    if started:
+        _ok(f"UnifyRoute is running (PID {proc.pid}).")
+        _info(f"Open: http://localhost:{port}")
+        _info(f"Logs: {log_dir}/app.log  (access: {log_dir}/access.log)")
+    else:
+        print()
+        _die(
+            f"Server did not respond within {max_wait}s.\n"
+            f"         Check {log_file} for errors."
+        )
 
 
 def _stop_server():
@@ -360,7 +424,7 @@ def cmd_cleanstart():
     time.sleep(1)
 
     # Rotate log file so new run starts clean
-    log_file = SCRIPT_DIR / "logs" / "api.log"
+    log_file = SCRIPT_DIR / "logs" / "app.log"
     if log_file.exists():
         import datetime
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -424,6 +488,133 @@ def cmd_import_keys(sub: list[str]):
     _uv_run(["--package", "shared", "python", "scripts/import-keys.py", sub[0]])
 
 
+def cmd_doctor():
+    """Run diagnostics and attempt self-healing of common issues."""
+    import shutil
+    print("\n🩺  UnifyRoute Doctor — System Health Check\n")
+    print("  " + "═" * 50)
+
+    issues = 0
+    fixed = 0
+
+    # ── 1. Docker ─────────────────────────────────────────────────
+    print("\n  1. Docker Daemon")
+    docker = shutil.which("docker")
+    if not docker:
+        print("     ⚠️  Docker not found on PATH")
+        issues += 1
+    else:
+        result = subprocess.run([docker, "info"], capture_output=True, text=True)
+        if result.returncode != 0:
+            print("     ❌  Docker daemon is NOT running")
+            issues += 1
+            if sys.platform != "win32":
+                print("     🔧  Attempting to start Docker...")
+                start = subprocess.run(["sudo", "systemctl", "start", "docker"], capture_output=True, text=True)
+                if start.returncode == 0:
+                    print("     ✅  Docker daemon started")
+                    fixed += 1
+                else:
+                    print(f"     ❌  Failed: {start.stderr.strip()}")
+        else:
+            print("     ✅  Docker daemon is running")
+
+    # ── 2. Redis ──────────────────────────────────────────────────
+    print("\n  2. Redis Connectivity")
+    redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+    try:
+        import redis
+        r = redis.from_url(redis_url)
+        r.ping()
+        print(f"     ✅  Redis responding at {redis_url}")
+
+        # Check for stale failure keys
+        failed_keys = list(r.scan_iter(match="failed:*", count=100))
+        if failed_keys:
+            print(f"     ℹ️   {len(failed_keys)} provider(s) currently in cooldown")
+
+        # Check for open circuits
+        circuit_keys = list(r.scan_iter(match="circuit:*", count=100))
+        if circuit_keys:
+            print(f"     ⚠️  {len(circuit_keys)} circuit breaker(s) OPEN")
+            issues += len(circuit_keys)
+
+        # Check for cooldown counters
+        cooldown_keys = list(r.scan_iter(match="cooldown:count:*", count=100))
+        if cooldown_keys:
+            print(f"     ℹ️   {len(cooldown_keys)} provider(s) with active cooldown counters")
+
+    except ImportError:
+        print("     ⚠️  redis-py not installed — install with: pip install redis")
+        issues += 1
+    except Exception as e:
+        print(f"     ❌  Redis not reachable: {e}")
+        issues += 1
+        if docker:
+            print("     🔧  Attempting to start Redis via Docker...")
+            result = subprocess.run(
+                [docker, "compose", "up", "-d", "redis"],
+                cwd=str(SCRIPT_DIR), capture_output=True, text=True,
+            )
+            if result.returncode == 0:
+                print("     ✅  Redis container started")
+                fixed += 1
+            else:
+                print(f"     ❌  Failed: {result.stderr.strip()}")
+
+    # ── 3. Application Health ─────────────────────────────────────
+    print("\n  3. Application Health")
+    port = os.environ.get("PORT", "6565")
+    health_url = f"http://localhost:{port}/api/health"
+    try:
+        import urllib.request
+        import json as json_mod
+        resp = urllib.request.urlopen(health_url, timeout=5)
+        data = json_mod.loads(resp.read())
+        status = data.get("status", "unknown")
+        if status == "ok":
+            print(f"     ✅  API gateway healthy at :{port}")
+            sh = data.get("self_healing", {})
+            if isinstance(sh, dict):
+                incidents = sh.get("incidents", {})
+                health = sh.get("provider_health", {})
+                print(f"     ℹ️   Tracked incidents: {incidents.get('total_tracked', 0)}")
+                print(f"     ℹ️   Open circuits: {incidents.get('open_circuits', 0)}")
+                print(f"     ℹ️   Providers: {health.get('healthy', 0)} healthy, {health.get('unhealthy', 0)} unhealthy")
+        else:
+            print(f"     ⚠️  Status: {status}")
+    except Exception as e:
+        print(f"     ❌  API not reachable at :{port} — {e}")
+        issues += 1
+
+    # ── 4. Stale failure cleanup ──────────────────────────────────
+    print("\n  4. Self-Healing Status")
+    try:
+        import redis
+        r = redis.from_url(redis_url)
+        incident_keys = list(r.scan_iter(match="incidents:*", count=100))
+        total_incidents = 0
+        for key in incident_keys:
+            total_incidents += r.zcard(key)
+        print(f"     ℹ️   Active incident records: {total_incidents}")
+
+        health_keys = list(r.scan_iter(match="health:*", count=100))
+        print(f"     ℹ️   Health probe cache entries: {len(health_keys)}")
+    except Exception:
+        print("     ⚠️  Could not read self-healing data (Redis unavailable)")
+
+    # ── Summary ───────────────────────────────────────────────────
+    print("\n  " + "═" * 50)
+    if issues == 0:
+        print("  ✅  All checks passed. System is healthy.\n")
+    else:
+        print(f"  ⚠️  {issues} issue(s) found, {fixed} auto-fixed.")
+        if issues > fixed:
+            print(f"  ❌  {issues - fixed} issue(s) require manual attention.\n")
+        else:
+            print("  ✅  All issues resolved.\n")
+
+
 
 # ── Usage ──────────────────────────────────────────────────────────────────────
 
@@ -437,6 +628,8 @@ Commands:
   stop                                Stop the application
   restart                             Restart the application
   clean-start                         Stop everything, archive logs, start fresh
+  doctor                              Run diagnostics and auto-heal common issues
+  logs                                View and search system event logs
   get token [all|admin|api]           List API tokens (requires master password)
   create token [admin|api]            Create a new API token (requires master password)
   update token <id> <label>           Update a token's label (requires master password)
@@ -450,6 +643,8 @@ Examples:
   ./unifyroute setup uninstall        Clean up everything
   ./unifyroute start                  Start the app
   ./unifyroute clean-start            Stop stale processes, archive logs, start fresh
+  ./unifyroute doctor                 Check system health, auto-fix issues
+  ./unifyroute logs --level ERROR     View recent system errors
   ./unifyroute get token              List all tokens
   ./unifyroute create token admin     Create an admin token
 """
@@ -485,6 +680,12 @@ def main():
 
     elif cmd in ("clean-start", "cleanstart"):
         cmd_cleanstart()
+
+    elif cmd == "doctor":
+        cmd_doctor()
+
+    elif cmd == "logs":
+        _uv_run(["--package", "shared", "python", "scripts/list-logs.py"] + rest)
 
     elif cmd == "get":
         if rest and rest[0] == "token":

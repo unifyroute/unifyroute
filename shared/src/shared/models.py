@@ -184,3 +184,15 @@ class RoutingConfig(Base):
     yaml_content: Mapped[str] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+
+class SystemEvent(Base):
+    __tablename__ = "system_events"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    level: Mapped[str] = mapped_column(String(50), index=True)
+    component: Mapped[str] = mapped_column(String(100), index=True)
+    event_type: Mapped[str] = mapped_column(String(100))
+    message: Mapped[str] = mapped_column(Text)
+    details: Mapped[dict | None] = mapped_column(sa_JSON, nullable=True)
+

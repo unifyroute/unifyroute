@@ -314,7 +314,7 @@ class TestE2EFlow:
         """Brain health check should return 200."""
         token = _resolve_admin_token()
         with httpx.Client(base_url=BASE_URL, headers={"Authorization": f"Bearer {token}"}, timeout=15) as c:
-            r = c.get("/api/brain/health")
+            r = c.get("/api/admin/brain/status")
         assert r.status_code == 200, f"Brain health check failed: {r.text}"
 
     # ── 13. Wizard ───────────────────────────────────────────────
@@ -334,8 +334,14 @@ class TestE2EFlow:
         token = _resolve_admin_token()
         with httpx.Client(base_url=BASE_URL, headers={"Authorization": f"Bearer {token}"}, timeout=15) as c:
             providers = c.get("/api/admin/providers").json()
+            creds = c.get("/api/admin/credentials").json()
             for p in providers:
                 if p.get("name", "").startswith("e2e-prov-"):
+                    # Delete all credentials for this provider first
+                    for cr in creds:
+                        if cr.get("provider_id") == p["id"]:
+                            c.delete(f"/api/admin/credentials/{cr['id']}")
+                    
                     r = c.delete(f"/api/admin/providers/{p['id']}")
                     assert r.status_code in (200, 404), \
                         f"Cleanup failed for provider {p['name']}: {r.status_code}"

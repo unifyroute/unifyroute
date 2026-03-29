@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, Request, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +14,9 @@ from shared.models import GatewayKey, RequestLog
 from shared.schemas import ChatCompletionRequest, CompletionRequest
 from router.core import select_model, get_ranked_candidates
 from router.adapters import get_adapter
-from router.quota import mark_provider_failed
+from router.quota import mark_provider_failed, record_success
+from selfheal.incident_tracker import record_incident
+from selfheal.adaptive_cooldown import record_failure as adaptive_record_failure, reset_failure_count
 
 from api_gateway.auth import get_current_key
 
@@ -225,6 +227,10 @@ async def create_chat_completion(
                     "Chat completion success: provider=%s model=%s tokens=%d/%d latency=%dms",
                     provider_name, actual_model, prompt_tokens, completion_tokens, latency_ms,
                 )
+
+                # Self-heal: reset adaptive cooldown on success
+                await record_success(credential.id, actual_model)
+                await reset_failure_count(credential.id, actual_model)
                 
                 bg_data.update({
                     "completion_tokens": completion_tokens,
@@ -241,18 +247,22 @@ async def create_chat_completion(
                 return response
 
         except httpx.ReadError as e:
-            # Mark failed and try next
-            await mark_provider_failed(credential.id, actual_model)
+            # Self-heal: record incident + adaptive cooldown
+            ttl = await adaptive_record_failure(credential.id, actual_model)
+            await mark_provider_failed(credential.id, actual_model, timeout_seconds=ttl)
+            await record_incident(credential.id, actual_model, str(e), provider=provider_name)
             last_error = f"Connection error: {str(e)}"
-            logger.warning("Connection error with %s/%s, failing over: %s", provider_name, actual_model, e)
+            logger.warning("Connection error with %s/%s (cooldown %ds), failing over: %s", provider_name, actual_model, ttl, e)
             continue
         except Exception as e:
-            # Rate limits or auth errors
+            # Self-heal: record incident + adaptive cooldown for all errors
             error_str = str(e).lower()
-            if "rate limit" in error_str or "429" in error_str or "unauthorized" in error_str:
-                 await mark_provider_failed(credential.id, actual_model)
+            ttl = await adaptive_record_failure(credential.id, actual_model)
+            if "rate limit" in error_str or "429" in error_str or "unauthorized" in error_str or "timeout" in error_str or "connection" in error_str:
+                await mark_provider_failed(credential.id, actual_model, timeout_seconds=ttl)
+            await record_incident(credential.id, actual_model, str(e), provider=provider_name)
             last_error = str(e)
-            logger.warning("Error with %s/%s, failing over: %s", provider_name, actual_model, last_error)
+            logger.warning("Error with %s/%s (cooldown %ds), failing over: %s", provider_name, actual_model, ttl, last_error)
             continue
             
     # If we exhausted all candidates
@@ -278,55 +288,8 @@ async def create_chat_completion(
         "credential_id": None
     }
 
-    msg_id = f"chatcmpl-mock-{int(datetime.datetime.now().timestamp())}"
-    if body.stream:
-        async def mock_stream():
-            mock_chunk = {
-                "id": msg_id,
-                "object": "chat.completion.chunk",
-                "created": int(datetime.datetime.now().timestamp()),
-                "model": body.model,
-                "choices": [{
-                    "index": 0,
-                    "delta": {"role": "assistant", "content": exhaustion_msg},
-                    "finish_reason": None
-                }]
-            }
-            yield f"data: {json.dumps(mock_chunk)}\n\n"
-            
-            mock_chunk_end = {
-                "id": msg_id,
-                "object": "chat.completion.chunk",
-                "created": int(datetime.datetime.now().timestamp()),
-                "model": body.model,
-                "choices": [{
-                    "index": 0,
-                    "delta": {},
-                    "finish_reason": "stop"
-                }]
-            }
-            yield f"data: {json.dumps(mock_chunk_end)}\n\n"
-            yield "data: [DONE]\n\n"
-            
-        return StreamingResponse(
-            mock_stream(), 
-            media_type="text/event-stream",
-            background=BackgroundTask(log_request_bg_task, bg_data_fail)
-        )
-    else:
-        background_tasks.add_task(log_request_bg_task, bg_data_fail)
-        return {
-            "id": msg_id,
-            "object": "chat.completion",
-            "created": int(datetime.datetime.now().timestamp()),
-            "model": body.model,
-            "choices": [{
-                "index": 0,
-                "message": {"role": "assistant", "content": exhaustion_msg},
-                "finish_reason": "stop"
-            }],
-            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-        }
+    background_tasks.add_task(log_request_bg_task, bg_data_fail)
+    raise HTTPException(status_code=503, detail=f"Model routing failed: {last_error}")
 
 
 @router.post("/completions")
@@ -446,16 +409,20 @@ async def create_completion(
                 return res_dict
 
         except httpx.ReadError as e:
-            await mark_provider_failed(credential.id, actual_model)
+            ttl = await adaptive_record_failure(credential.id, actual_model)
+            await mark_provider_failed(credential.id, actual_model, timeout_seconds=ttl)
+            await record_incident(credential.id, actual_model, str(e), provider=provider_name)
             last_error = f"Connection error: {str(e)}"
-            logger.warning("Text completion connection error with %s/%s: %s", provider_name, actual_model, e)
+            logger.warning("Text completion connection error with %s/%s (cooldown %ds): %s", provider_name, actual_model, ttl, e)
             continue
         except Exception as e:
             error_str = str(e).lower()
-            if "rate limit" in error_str or "429" in error_str or "unauthorized" in error_str:
-                 await mark_provider_failed(credential.id, actual_model)
+            ttl = await adaptive_record_failure(credential.id, actual_model)
+            if "rate limit" in error_str or "429" in error_str or "unauthorized" in error_str or "timeout" in error_str or "connection" in error_str:
+                await mark_provider_failed(credential.id, actual_model, timeout_seconds=ttl)
+            await record_incident(credential.id, actual_model, str(e), provider=provider_name)
             last_error = str(e)
-            logger.warning("Text completion error with %s/%s: %s", provider_name, actual_model, last_error)
+            logger.warning("Text completion error with %s/%s (cooldown %ds): %s", provider_name, actual_model, ttl, last_error)
             continue
             
     # If we exhausted all candidates
@@ -480,54 +447,5 @@ async def create_completion(
         "credential_id": None
     }
 
-    msg_id = f"cmpl-mock-{int(datetime.datetime.now().timestamp())}"
-    if body.stream:
-        async def mock_stream_text():
-            mock_chunk = {
-                "id": msg_id,
-                "object": "text_completion",
-                "created": int(datetime.datetime.now().timestamp()),
-                "model": body.model,
-                "choices": [{
-                    "text": exhaustion_msg,
-                    "index": 0,
-                    "logprobs": None,
-                    "finish_reason": None
-                }]
-            }
-            yield f"data: {json.dumps(mock_chunk)}\n\n"
-            mock_chunk_end = {
-                "id": msg_id,
-                "object": "text_completion",
-                "created": int(datetime.datetime.now().timestamp()),
-                "model": body.model,
-                "choices": [{
-                    "text": "",
-                    "index": 0,
-                    "logprobs": None,
-                    "finish_reason": "stop"
-                }]
-            }
-            yield f"data: {json.dumps(mock_chunk_end)}\n\n"
-            yield "data: [DONE]\n\n"
-            
-        return StreamingResponse(
-            mock_stream_text(), 
-            media_type="text/event-stream",
-            background=BackgroundTask(log_request_bg_task, bg_data_fail)
-        )
-    else:
-        background_tasks.add_task(log_request_bg_task, bg_data_fail)
-        return {
-            "id": msg_id,
-            "object": "text_completion",
-            "created": int(datetime.datetime.now().timestamp()),
-            "model": body.model,
-            "choices": [{
-                "text": exhaustion_msg,
-                "index": 0,
-                "logprobs": None,
-                "finish_reason": "stop"
-            }],
-            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-        }
+    background_tasks.add_task(log_request_bg_task, bg_data_fail)
+    raise HTTPException(status_code=503, detail=f"Model routing failed: {last_error}")

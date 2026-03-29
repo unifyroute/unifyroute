@@ -22,6 +22,7 @@ services:
       - DB_BACKEND=sqlite
       - REDIS_URL=redis://redis:6379/0
       - MASTER_PASSWORD=${MASTER_PASSWORD:-admin}
+      - VAULT_MASTER_KEY=${VAULT_MASTER_KEY:-}
       - JWT_SECRET=${JWT_SECRET:-supersecret123}
     extra_hosts:
       - "host.docker.internal:host-gateway"

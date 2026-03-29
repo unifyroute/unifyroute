@@ -5,6 +5,7 @@ never as raw exceptions. This makes Brain resilient to individual provider failu
 """
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 
@@ -12,6 +13,8 @@ import httpx
 
 from .config import PROVIDER_HEALTH_URLS, PROVIDER_CUSTOM_AUTH
 from .errors import brain_safe_message
+
+logger = logging.getLogger("brain.health")
 
 
 @dataclass
@@ -25,9 +28,10 @@ class HealthResult:
 async def check_endpoint(
     url: str,
     headers: dict,
-    timeout: float = 8.0,
+    timeout: float = 20.0,
 ) -> HealthResult:
     """Low-level HTTP GET health check against a URL with given headers."""
+    logger.info("Health check: GET %s (timeout=%ss)", url, timeout)
     start = time.monotonic()
     try:
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
@@ -48,10 +52,18 @@ async def check_endpoint(
             # Raise so it is caught below and passed through brain_safe_message
             raise Exception(f"HTTP {r.status_code}: {err_msg}")
             
+        logger.info("Health check OK: %s (%dms)", url, latency)
         return HealthResult(ok=True, latency_ms=latency, status_code=r.status_code, message="OK")
     except Exception as exc:
         latency = int((time.monotonic() - start) * 1000)
-        return HealthResult(ok=False, latency_ms=latency, message=brain_safe_message(exc))
+        logger.warning("Health check FAILED: %s (%dms) — %s", url, latency, exc)
+        status_code = getattr(exc, "status_code", 0)
+        if str(exc).startswith("HTTP "):
+            try:
+                status_code = int(str(exc).split(" ")[1].strip(":"))
+            except Exception:
+                pass
+        return HealthResult(ok=False, latency_ms=latency, status_code=status_code, message=brain_safe_message(exc))
 
 
 async def check_provider_health(
@@ -79,5 +91,11 @@ async def check_provider_health(
         # Generic fallback
         url = f"https://api.{provider_name}.com/v1/models"
 
+    # Google Generative Language API requires key as query parameter
+    if provider_name == "google" and "generativelanguage.googleapis.com" in url:
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}key={api_key}"
+
+    logger.info("Checking provider '%s' at %s", provider_name, url.split("?")[0])
     return await check_endpoint(url, headers)
 

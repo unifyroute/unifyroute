@@ -11,6 +11,7 @@ from shared.models import Credential, QuotaSnapshot, Provider, ProviderModel
 from shared.security import decrypt_secret
 from router.quota import get_redis
 from router.adapters import get_adapter
+from shared.events import log_event_isolated
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("quota-poller")
@@ -40,6 +41,13 @@ async def poll_quotas():
                 requests = quota_info.requests_remaining
             except Exception as exc:
                 logger.error(f"Quota fetch failed for {cred.label} ({provider_name}): {exc}")
+                await log_event_isolated(
+                    level="WARNING",
+                    component="quota",
+                    event_type="quota_fetch_error",
+                    message=f"Quota fetch failed for {cred.label} ({provider_name})",
+                    details={"error": str(exc), "credential_id": str(cred.id)}
+                )
                 tokens, requests = 10000, None
 
             # 1. Persist snapshot

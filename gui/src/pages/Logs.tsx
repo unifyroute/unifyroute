@@ -5,7 +5,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { useLogs, useLogStats, useProviders } from "@/lib/api"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useLogs, useSystemLogs, useLogStats, useProviders } from "@/lib/api"
 import { ErrorState } from "@/components/error-state"
 import { Activity, AlertTriangle, Zap, RefreshCw, ChevronDown, ChevronRight, Search } from "lucide-react"
 
@@ -86,7 +87,7 @@ function LogRow({ log }: { log: any }) {
 
 const PAGE_SIZE = 25
 
-export function Logs() {
+function RequestLogsTab() {
     const [page, setPage] = useState(1)
     const [provider, setProvider] = useState("all")
     const [status, setStatus] = useState("all")
@@ -153,17 +154,6 @@ export function Logs() {
 
     return (
         <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-end justify-between">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Sessions &amp; Logs</h2>
-                    <p className="text-muted-foreground pt-1">Request history, token counts, costs, and response details.</p>
-                </div>
-                <Button variant="outline" size="sm" onClick={() => mutate()}>
-                    <RefreshCw className="h-4 w-4" />
-                </Button>
-            </div>
-
             {/* Stats cards */}
             <div className="grid gap-4 md:grid-cols-3">
                 {statsItems.map(({ label, value, icon: Icon, sub }) => (
@@ -223,6 +213,9 @@ export function Logs() {
                                     <SelectItem value="error">Error</SelectItem>
                                 </SelectContent>
                             </Select>
+                            <Button variant="outline" size="sm" onClick={() => mutate()}>
+                                <RefreshCw className="h-4 w-4" />
+                            </Button>
                         </div>
                     </div>
                 </CardHeader>
@@ -293,6 +286,240 @@ export function Logs() {
                     )}
                 </CardContent>
             </Card>
+        </div>
+    )
+}
+
+function SystemLogRow({ log }: { log: any }) {
+    const [expanded, setExpanded] = useState(false)
+    const hasDetail = log.details && Object.keys(log.details).length > 0
+
+    let levelVariant: "default" | "destructive" | "outline" | "secondary" = "default"
+    let levelClass = ""
+    if (log.level === "ERROR" || log.level === "CRITICAL") {
+        levelVariant = "destructive"
+    } else if (log.level === "WARNING") {
+        levelVariant = "default"
+        levelClass = "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 border-0"
+    } else {
+        levelVariant = "secondary"
+        levelClass = "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 border-0"
+    }
+
+    return (
+        <>
+            <TableRow
+                className={`${hasDetail ? "cursor-pointer hover:bg-muted/50" : ""} transition-colors`}
+                onClick={() => hasDetail && setExpanded(e => !e)}
+            >
+                <TableCell className="w-6 text-muted-foreground">
+                    {hasDetail
+                        ? (expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />)
+                        : null}
+                </TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">{formatTs(log.timestamp)}</TableCell>
+                <TableCell>
+                    <Badge variant={levelVariant} className={levelClass}>{log.level}</Badge>
+                </TableCell>
+                <TableCell className="text-sm font-medium">{log.component}</TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">{log.event_type}</TableCell>
+                <TableCell className="text-sm py-3 min-w-[200px] max-w-lg truncate" title={log.message}>{log.message}</TableCell>
+            </TableRow>
+            {expanded && hasDetail && (
+                <TableRow className="bg-muted/10">
+                    <TableCell colSpan={6} className="py-3 px-6">
+                        <div>
+                            <div className="text-xs font-semibold text-muted-foreground mb-1">Event Details</div>
+                            <pre className="text-xs bg-muted/40 rounded p-3 overflow-auto max-h-48 whitespace-pre-wrap break-words">
+                                {JSON.stringify(log.details, null, 2)}
+                            </pre>
+                        </div>
+                    </TableCell>
+                </TableRow>
+            )}
+        </>
+    )
+}
+
+function SystemLogsTab() {
+    const [page, setPage] = useState(1)
+    const [component, setComponent] = useState("all")
+    const [level, setLevel] = useState("all")
+    const [search, setSearch] = useState("")
+    const [debouncedSearch, setDebouncedSearch] = useState("")
+
+    // Debounce search input
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value
+        setSearch(val)
+        if (debounceRef.current) clearTimeout(debounceRef.current)
+        debounceRef.current = setTimeout(() => {
+            setDebouncedSearch(val)
+            setPage(1)
+        }, 400)
+    }, [])
+
+    const { logs, total, isLoading, isError, mutate } = useSystemLogs(
+        page, PAGE_SIZE,
+        component !== "all" ? component : undefined,
+        level !== "all" ? level : undefined,
+        debouncedSearch || undefined
+    )
+
+    // Auto-refresh every 30 seconds
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+    useEffect(() => {
+        intervalRef.current = setInterval(() => mutate(), 30000)
+        return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+    }, [mutate])
+
+    if (isError) return <ErrorState />
+
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+    return (
+        <Card>
+            <CardHeader>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <CardTitle>System Events</CardTitle>
+                        <CardDescription className="mt-0.5">
+                            {isLoading ? "Loading…" : `${total.toLocaleString()} total events`}
+                            {total > 0 && ` · Page ${page} of ${totalPages}`}
+                        </CardDescription>
+                    </div>
+                    {/* Filters */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <div className="relative">
+                            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                            <Input
+                                placeholder="Search message…"
+                                className="pl-8 h-8 w-[180px] text-sm"
+                                value={search}
+                                onChange={handleSearchChange}
+                            />
+                        </div>
+                        <Select value={component} onValueChange={v => { setComponent(v); setPage(1) }}>
+                            <SelectTrigger className="h-8 w-[140px] text-sm">
+                                <SelectValue placeholder="All Components" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Components</SelectItem>
+                                <SelectItem value="selfheal">selfheal</SelectItem>
+                                <SelectItem value="quota">quota</SelectItem>
+                                <SelectItem value="api-gateway">api-gateway</SelectItem>
+                                <SelectItem value="brain">brain</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Select value={level} onValueChange={v => { setLevel(v); setPage(1) }}>
+                            <SelectTrigger className="h-8 w-[110px] text-sm">
+                                <SelectValue placeholder="All Levels" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Levels</SelectItem>
+                                <SelectItem value="INFO">INFO</SelectItem>
+                                <SelectItem value="WARNING">WARNING</SelectItem>
+                                <SelectItem value="ERROR">ERROR</SelectItem>
+                                <SelectItem value="CRITICAL">CRITICAL</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Button variant="outline" size="sm" onClick={() => mutate()}>
+                            <RefreshCw className="h-4 w-4" />
+                        </Button>
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent className="p-0">
+                <div className="rounded-b-lg border-t overflow-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="w-6" />
+                                <TableHead>Time</TableHead>
+                                <TableHead>Level</TableHead>
+                                <TableHead>Component</TableHead>
+                                <TableHead>Event Type</TableHead>
+                                <TableHead className="w-full">Message</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {isLoading ? (
+                                <TableRow>
+                                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                                        Loading logs…
+                                    </TableCell>
+                                </TableRow>
+                            ) : logs.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                                        No system events found.
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                logs.map((log: any) => (
+                                    <SystemLogRow key={log.id} log={log} />
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-6 py-3 border-t text-sm text-muted-foreground">
+                        <span>
+                            Showing {Math.min((page - 1) * PAGE_SIZE + 1, total)}–{Math.min(page * PAGE_SIZE, total)} of {total.toLocaleString()}
+                        </span>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page === 1}
+                            >
+                                Previous
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={page === totalPages}
+                            >
+                                Next
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    )
+}
+
+
+export function Logs() {
+    return (
+        <div className="space-y-6">
+            {/* Header */}
+            <div className="flex items-end justify-between">
+                <div>
+                    <h2 className="text-3xl font-bold tracking-tight">Logs &amp; Events</h2>
+                    <p className="text-muted-foreground pt-1">Request history, provider performance, and application events.</p>
+                </div>
+            </div>
+
+            <Tabs defaultValue="requests" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
+                    <TabsTrigger value="requests">Request Logs</TabsTrigger>
+                    <TabsTrigger value="system">System Events</TabsTrigger>
+                </TabsList>
+                <TabsContent value="requests" className="pt-4 space-y-4">
+                    <RequestLogsTab />
+                </TabsContent>
+                <TabsContent value="system" className="pt-4 space-y-4">
+                    <SystemLogsTab />
+                </TabsContent>
+            </Tabs>
         </div>
     )
 }

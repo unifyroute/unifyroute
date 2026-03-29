@@ -5,6 +5,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
+# ── Centralized logging — MUST be first, before any getLogger() calls ─────
+from shared.logging_config import setup_logging
+setup_logging()
+
 # Pre-load anyio's asyncio backend to work around a Python 3.14 import-system
 # regression: anyio's _backends subpackage fails to import when first accessed
 # from a worker thread (e.g. Starlette StaticFiles.check_config via run_sync).
@@ -19,45 +23,16 @@ from credential_vault.main import app as vault_app
 
 logger = logging.getLogger("launcher")
 
-# Configure Uvicorn/FastAPI loggers to make sure output reaches stdout where unifying script captures it
-def _configure_loggers():
-    import sys
-    import os
-    from logging.handlers import RotatingFileHandler
-    
-    log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    formatter = logging.Formatter(log_format)
-    
-    # Console logger
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    
-    # File logger
-    os.makedirs("logs", exist_ok=True)
-    file_handler = RotatingFileHandler(
-        "logs/api.log", maxBytes=10485760, backupCount=5
-    )
-    file_handler.setFormatter(formatter)
-    
-    # Configure root logger and essential app loggers
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
-    root_logger.handlers = [console_handler, file_handler]
-    
-    for name in ["launcher", "api_gateway", "router", "shared", "credential_vault", "uvicorn", "uvicorn.error", "uvicorn.access", "litellm", "httpx"]:
-        l = logging.getLogger(name)
-        l.setLevel(logging.INFO)
-        l.handlers = [console_handler, file_handler]
-        l.propagate = False
-
-_configure_loggers()
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    port = os.environ.get("PORT", "6565")
+    host = os.environ.get("HOST", "0.0.0.0")
+    logger.info("UnifyRoute starting on %s:%s", host, port)
+    logger.info("Components mounted: API Gateway → /api, Credential Vault → /internal, GUI → /")
+
     # Start the unified scheduler
     scheduler = start_scheduler()
-    logger.info("Unified launcher started.")
 
     # Locate and load routing.yaml
     import router.config
@@ -75,13 +50,39 @@ async def lifespan(app: FastAPI):
                 break
     if config_path:
         router.config.start_watchdog(config_path)
+        logger.info("Routing config loaded from %s", config_path)
     else:
-        logger.warning("Could not locate routing.yaml for watchdog")
+        logger.warning("Could not locate routing.yaml — routing may not work correctly")
+
+    logger.info("UnifyRoute startup complete.")
+
+    # Self-healing: run initial health probe on startup
+    try:
+        from selfheal.health_prober import probe_all_providers
+        logger.info("Running initial provider health probe...")
+        probe_result = await probe_all_providers()
+        logger.info(
+            "Initial health probe: %d healthy, %d unhealthy out of %d providers",
+            probe_result.get("healthy", 0),
+            probe_result.get("unhealthy", 0),
+            probe_result.get("total", 0),
+        )
+    except Exception as e:
+        logger.warning("Initial health probe skipped: %s", e)
+
+    # Self-healing: verify Redis connectivity
+    try:
+        from router.quota import get_redis
+        r = get_redis()
+        await r.ping()
+        logger.info("Redis connectivity verified.")
+    except Exception as e:
+        logger.warning("Redis not reachable — self-healing features may be limited: %s", e)
 
     yield
     # Shutdown the unified scheduler
     shutdown_scheduler(scheduler)
-    logger.info("Unified launcher shutdown.")
+    logger.info("UnifyRoute shutdown complete.")
 
 app = FastAPI(title="LLM Gateway Launcher", lifespan=lifespan)
 

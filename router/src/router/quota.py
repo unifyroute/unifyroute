@@ -50,6 +50,22 @@ async def is_provider_failed(credential_id: UUID, model_id: str) -> bool:
         logger.error("Redis fail-check lookup failed: %s", e)
         return False
 
+async def record_success(credential_id: UUID, model_id: str):
+    """Clear the failure marker for a provider after a successful request.
+
+    Called by the completions route to signal recovery so the router
+    immediately re-includes this provider in candidate selection.
+    """
+    try:
+        r = get_redis()
+        key = f"failed:{credential_id}:{model_id}"
+        deleted = await r.delete(key)
+        if deleted:
+            logger.info("Cleared failure marker: cred=%s model=%s", credential_id, model_id)
+    except Exception as e:
+        logger.error("Failed to clear failure marker in Redis: %s", e)
+
+
 async def trigger_provider_sync():
     """Trigger a background synchronization of provider models and credentials."""
     # This might be handled by the quota-poller service now.

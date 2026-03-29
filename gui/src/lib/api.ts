@@ -137,6 +137,24 @@ export function useLogs(page = 1, limit = 20, provider?: string, status?: string
     }
 }
 
+export function useSystemLogs(page = 1, limit = 50, component?: string, level?: string, search?: string) {
+    const url = new URL('/admin/system-logs', window.location.origin)
+    url.searchParams.set('offset', ((page - 1) * limit).toString())
+    url.searchParams.set('limit', limit.toString())
+    if (component && component !== "all") url.searchParams.set('component', component)
+    if (level && level !== "all") url.searchParams.set('level', level)
+    if (search) url.searchParams.set('search', search)
+
+    const { data, error, isLoading, mutate } = useSWR(url.pathname + url.search, fetcher)
+    return {
+        logs: data?.items || [],
+        total: data?.total || 0,
+        isLoading,
+        isError: error,
+        mutate
+    }
+}
+
 export function useLogStats(hours: number = 24) {
     const { data, error, isLoading, mutate } = useSWR(`/admin/logs/stats?hours=${hours}`, fetcher)
     return { stats: data, isLoading, isError: error, mutate }

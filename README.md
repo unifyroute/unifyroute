@@ -79,6 +79,7 @@ gui/              React dashboard
 credential-vault/ OAuth/secret helper service
 quota-poller/     Quota and model sync workers
 launcher/         Unified app launcher
+selfheal/         Proactive failover and incident tracking
 docs/             Documentation
 scripts/          Utility and setup scripts
 ```

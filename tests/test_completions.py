@@ -37,13 +37,13 @@ class TestChatCompletionsInput:
         assert r.status_code == 200, r.text
 
     def test_unknown_alias_via_yaml_returns_error(self, api_client: httpx.Client):
-        """An alias not in virtual models and not in routing YAML returns 200 with fallback mock message."""
+        """An alias not in virtual models and not in routing YAML returns 503."""
         r = api_client.post("/api/v1/chat/completions", json={
             "model": "nonexistent-alias-xyz",
             "messages": [{"role": "user", "content": "test"}],
         })
-        assert r.status_code == 200, r.text
-        assert "We're sorry" in r.text
+        assert r.status_code == 503, r.text
+        assert "Model routing failed" in r.text
 
     def test_unauthenticated_chat_rejected(self, raw_client: httpx.Client):
         r = raw_client.post("/api/v1/chat/completions", json={
@@ -98,15 +98,15 @@ class TestVirtualModelRouting:
         assert len(content) > 0
 
     def test_unknown_alias_returns_mock_response(self, api_client: httpx.Client):
-        """Routing errors (RuntimeError) now return graceful 200 mock message."""
+        """Routing errors (RuntimeError) now return 503."""
         r = api_client.post("/api/v1/chat/completions", json={
             "model": "nonexistent-alias-xyz",
             "messages": [{"role": "user", "content": "test"}],
         })
-        assert r.status_code == 200
+        assert r.status_code == 503
         body = r.json()
-        content = body.get("choices", [{}])[0].get("message", {}).get("content", "")
-        assert "We're sorry, no models or quota are available" in content
+        assert "error" in body
+        assert "Model routing failed" in body["error"]["message"]
 
 
 class TestCompletionsEndpoint:
