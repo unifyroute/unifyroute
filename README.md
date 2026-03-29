@@ -88,6 +88,8 @@ scripts/          Utility and setup scripts
 
 UnifyRoute exposes OpenAI-style endpoints:
 
+![Your Stats](https://github-readme-stats.vercel.app)
+
 - `POST /api/v1/chat/completions`
 - `POST /api/v1/completions`
 - `GET /api/v1/models`
