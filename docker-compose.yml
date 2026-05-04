@@ -39,7 +39,7 @@ services:
       context: .
       dockerfile: Dockerfile.api
     container_name: unifyroute_quota_poller
-    command: [ "python", "-m", "quota_poller.main" ]
+    command: [ "uv", "run", "python", "-m", "quota_poller.main" ]
     environment:
       - SQLITE_PATH=${SQLITE_PATH:-data/unifyroute.db}
       - DB_BACKEND=sqlite
@@ -57,7 +57,7 @@ services:
       context: .
       dockerfile: Dockerfile.api
     container_name: unifyroute_credential_vault
-    command: [ "uvicorn", "credential_vault.main:app", "--host", "0.0.0.0", "--port", "8001" ]
+    command: [ "uv", "run", "uvicorn", "credential_vault.main:app", "--host", "0.0.0.0", "--port", "8001" ]
     environment:
       - SQLITE_PATH=${SQLITE_PATH:-data/unifyroute.db}
       - DB_BACKEND=sqlite

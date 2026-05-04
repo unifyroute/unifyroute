@@ -1,21 +1,50 @@
-FROM python:3.11-slim
+# =============================================================================
+# UnifyRoute API — Multi-stage build with uv
+# =============================================================================
+
+# ── Base stage ─────────────────────────────────────────────────────────────────
+FROM python:3.12-slim AS base
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y gcc && rm -rf /var/lib/apt/lists/*
+# Install system deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml README.md ./
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-COPY shared/ shared/
-COPY router/ router/
-COPY api-gateway/ api-gateway/
-COPY credential-vault/ credential-vault/
-COPY quota-poller/ quota-poller/
-COPY brain/ brain/
+ENV \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-RUN pip install --no-cache-dir . uvicorn
+# ── Install dependencies (layer caching) ───────────────────────────────────────
+FROM base AS deps
+
+COPY pyproject.toml uv.lock ./
+COPY shared/pyproject.toml shared/
+COPY brain/pyproject.toml brain/
+COPY router/pyproject.toml router/
+COPY api-gateway/pyproject.toml api-gateway/
+COPY credential-vault/pyproject.toml credential-vault/
+COPY quota-poller/pyproject.toml quota-poller/
+COPY launcher/pyproject.toml launcher/
+COPY selfheal/pyproject.toml selfheal/
+
+RUN uv sync --frozen --no-dev --no-install-project
+
+# ── Runtime stage ──────────────────────────────────────────────────────────────
+FROM deps AS runtime
+
+COPY . .
+
+# Install the workspace packages (editable)
+RUN uv sync --frozen --no-dev
 
 ENV PYTHONPATH=/app/shared/src:/app/router/src
 
-# Default to api-gateway
-CMD ["uvicorn", "api_gateway.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Default: api-gateway
+CMD ["uv", "run", "uvicorn", "api_gateway.main:app", "--host", "0.0.0.0", "--port", "8000"]
