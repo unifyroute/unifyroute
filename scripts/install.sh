@@ -17,7 +17,7 @@
 #   UNIFYROUTE_SKIP   Comma-separated: prereqs,clone,setup,build,start
 # ===================================================
 
-set -euo pipefail
+set -eu
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 INSTALL_DIR="${UNIFYROUTE_DIR:-$HOME/UnifyRoute}"
