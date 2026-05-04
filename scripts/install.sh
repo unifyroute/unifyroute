@@ -1,10 +1,9 @@
-#!/usr/bin/env bash
+#!/bin/sh
 #
 # UnifyRoute — One-command install for Linux & macOS
 # ===================================================
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/unifyroute/UnifyRoute/main/scripts/install.sh | sh
-#   curl -fsSL https://raw.githubusercontent.com/unifyroute/UnifyRoute/main/scripts/install.sh | sh -s -- --help
 #
 # Or if already cloned:
 #   ./scripts/install.sh
@@ -29,42 +28,35 @@ MASTER_PW="${UNIFYROUTE_PW:-}"
 SKIP="${UNIFYROUTE_SKIP:-}"
 
 REPO="https://github.com/unifyroute/UnifyRoute.git"
-RAW_BASE="https://raw.githubusercontent.com/unifyroute/UnifyRoute/$BRANCH"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 BOLD='\033[1m';  RED='\033[0;31m';  GREEN='\033[0;32m'
 YELLOW='\033[0;33m';  CYAN='\033[0;36m';  NC='\033[0m'
 
-info()  { printf "${CYAN}ℹ${NC}  %s\n" "$*"; }
-ok()    { printf "${GREEN}✅${NC}  %s\n" "$*"; }
-warn()  { printf "${YELLOW}⚠${NC}  %s\n" "$*"; }
-err()   { printf "${RED}❌${NC}  %s\n" "$*" >&2; }
-banner(){ printf "\n${BOLD}━━━ %s ━━━${NC}\n" "$*"; }
+info()   { printf "${CYAN}ℹ${NC}  %s\n" "$*"; }
+ok()     { printf "${GREEN}✅${NC}  %s\n" "$*"; }
+warn()   { printf "${YELLOW}⚠${NC}  %s\n" "$*"; }
+err()    { printf "${RED}❌${NC}  %s\n" "$*" >&2; }
+banner() { printf "\n${BOLD}━━━ %s ━━━${NC}\n" "$*"; }
 
-has() { command -v "$1" &>/dev/null; }
+has()    { command -v "$1" >/dev/null 2>&1; }
 
 skip_step() {
-  local name="$1"
-  [[ -z "$SKIP" ]] && return 1
-  [[ ",$SKIP," == *",$name,"* ]]
+  name="$1"
+  if [ -z "$SKIP" ]; then return 1; fi
+  case ",$SKIP," in *",$name,"*) return 0;; esac
+  return 1
 }
-
-cleanup() {
-  if [[ -n "${TMP_CLONE:-}" && -d "$TMP_CLONE" ]]; then
-    rm -rf "$TMP_CLONE"
-  fi
-}
-trap cleanup EXIT
 
 # ── Header ─────────────────────────────────────────────────────────────────────
 echo ""
 printf "${CYAN}${BOLD}"
 echo "  _    _       _  __  _____ _____   ____  _   _ _______ "
-echo " | |  | |     | | \\ \\/ /_   _|  __ \\|  _ \\| | | |__   __|"
-echo " | |  | |_ __ | |  \\  /  | | | |__) | |_) | | | |  | |   "
-echo " | |  | | '_ \\| |  /  \\  | | |  _  /|  _ <| | | |  | |   "
-echo " | |__| | | | | | / /\\ \\_| |_| | \\ \\| |_) | |_| |  | |   "
-echo "  \\____/|_| |_|_|/_/  \\_\\___|_|  \\_\\____/ \\___/   |_|   "
+echo " | |  | |     | | \ \/ /_   _|  __ \|  _ \| | | |__   __|"
+echo " | |  | |_ __ | |  \  /  | | | |__) | |_) | | | |  | |   "
+echo " | |  | | '_ \| |  /  \  | | |  _  /|  _ <| | | |  | |   "
+echo " | |__| | | | | | / /\ \_| |_| | \ \| |_) | |_| |  | |   "
+echo "  \____/|_| |_|_|/_/  \_\___|_|  \_\____/ \___/   |_|   "
 printf "${NC}"
 echo "                           One-command install"
 echo ""
@@ -78,21 +70,24 @@ info "OS:   $OS"
 info "Arch: $ARCH"
 
 case "$OS" in
-  Linux)  PKG_MGR="apt-get"
-          PKG_INSTALL="sudo apt-get install -y"
-          if has dnf; then PKG_MGR="dnf"; PKG_INSTALL="sudo dnf install -y"; fi
-          if has pacman; then PKG_MGR="pacman"; PKG_INSTALL="sudo pacman -S --noconfirm"; fi
-          ;;
-  Darwin) PKG_MGR="brew"
-          if ! has brew; then
-            warn "Homebrew not found — installing it..."
-            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          fi
-          PKG_INSTALL="brew install"
-          ;;
-  *)      err "Unsupported OS: $OS"; exit 1 ;;
+  Linux)
+    PKG_INSTALL="sudo apt-get install -y"
+    if has dnf; then PKG_INSTALL="sudo dnf install -y"; fi
+    if has pacman; then PKG_INSTALL="sudo pacman -S --noconfirm"; fi
+    ;;
+  Darwin)
+    if ! has brew; then
+      warn "Homebrew not found -- installing it..."
+      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    fi
+    PKG_INSTALL="brew install"
+    ;;
+  *)
+    err "Unsupported OS: $OS"
+    exit 1
+    ;;
 esac
-ok "$OS detected (package manager: $PKG_MGR)"
+ok "$OS detected"
 
 # ── Prerequisites ──────────────────────────────────────────────────────────────
 banner "Prerequisites"
@@ -108,9 +103,9 @@ else
   warn "Python 3.11+ not found. Installing..."
   case "$OS" in
     Linux)
-      if [[ "$PKG_MGR" == "apt-get" ]]; then
+      if echo "$PKG_INSTALL" | grep -q apt-get; then
         sudo apt-get update -qq && $PKG_INSTALL python3 python3-pip python3-venv
-      elif [[ "$PKG_MGR" == "dnf" ]]; then
+      elif echo "$PKG_INSTALL" | grep -q dnf; then
         $PKG_INSTALL python3 python3-pip python3-venv
       else
         $PKG_INSTALL python python-pip
@@ -130,12 +125,15 @@ if has uv; then
   ok "uv $(uv --version 2>&1 | awk '{print $2}')"
 else
   info "Installing uv..."
-  if has $PYTHON; then
-    $PYTHON -m pip install -q uv 2>/dev/null || true
+  if has curl; then
+    curl -fsSL https://astral.sh/uv/install.sh | sh
+  else
+    wget -qO- https://astral.sh/uv/install.sh | sh
   fi
-  if ! has uv; then
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    export PATH="$HOME/.local/bin:$PATH"
+  # Add uv to PATH for the rest of this script
+  if [ -f "$HOME/.local/bin/uv" ]; then
+    PATH="$HOME/.local/bin:$PATH"
+    export PATH
   fi
   if has uv; then
     ok "uv installed: $(uv --version 2>&1)"
@@ -151,15 +149,17 @@ if has node && has npm; then
 else
   warn "Node.js not found. Installing via nvm..."
   NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
-  if [[ ! -d "$NVM_DIR" ]]; then
-    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
+  if [ ! -d "$NVM_DIR" ]; then
+    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | sh
   fi
-  [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+  if [ -f "$NVM_DIR/nvm.sh" ]; then
+    . "$NVM_DIR/nvm.sh"
+  fi
   nvm install --lts --latest-npm 2>/dev/null || true
   if ! has node; then
     case "$OS" in
       Linux)
-        if [[ "$PKG_MGR" == "apt-get" ]]; then
+        if echo "$PKG_INSTALL" | grep -q apt-get; then
           curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && $PKG_INSTALL nodejs
         else
           $PKG_INSTALL nodejs
@@ -181,20 +181,19 @@ else
 fi
 
 # Docker (optional)
-if has docker && docker info &>/dev/null; then
+if has docker && docker info >/dev/null 2>&1; then
   ok "Docker $(docker --version 2>&1 | awk '{print $3}' | tr -d ',')"
 else
-  warn "Docker not available (optional — Redis will not auto-start)"
+  warn "Docker not available (optional -- Redis will not auto-start)"
 fi
 
 # ── Clone repo ─────────────────────────────────────────────────────────────────
 banner "Getting UnifyRoute"
 
-if [[ -f "./unifyroute" && -f "./scripts/setup.py" ]]; then
-  INFO_DIR="$PWD"
+if [ -f "./unifyroute" ] && [ -f "./scripts/setup.py" ]; then
   info "Already inside UnifyRoute repo: $PWD"
   CLONE_DIR="$PWD"
-elif [[ -d "$INSTALL_DIR" && -f "$INSTALL_DIR/unifyroute" ]]; then
+elif [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/unifyroute" ]; then
   info "Found existing install at $INSTALL_DIR"
   CLONE_DIR="$INSTALL_DIR"
 else
@@ -215,8 +214,8 @@ banner "UnifyRoute Setup"
 if ! skip_step "setup"; then
 
 # Generate master password if not set
-if [[ -z "$MASTER_PW" ]]; then
-  if command -v openssl &>/dev/null; then
+if [ -z "$MASTER_PW" ]; then
+  if has openssl; then
     MASTER_PW="$(openssl rand -base64 12 | tr '+/' '-_')"
   else
     MASTER_PW="unifyroute-$(date +%s)"
@@ -233,17 +232,17 @@ fi
 # ── Show admin token ───────────────────────────────────────────────────────────
 banner "Admin Token"
 
-if [[ -f ".admin_token" ]]; then
+if [ -f ".admin_token" ]; then
   ADMIN_TOKEN="$(cat .admin_token)"
-elif [[ -f ".api_token" ]]; then
+elif [ -f ".api_token" ]; then
   ADMIN_TOKEN="$(cat .api_token)"
 else
   ADMIN_TOKEN=""
 fi
 
-if [[ -n "$ADMIN_TOKEN" ]]; then
+if [ -n "$ADMIN_TOKEN" ]; then
   printf "\n${YELLOW}${BOLD}  ADMIN API TOKEN:${NC} ${CYAN}%s${NC}\n\n" "$ADMIN_TOKEN"
-  printf "  ${BOLD}Save this now${NC} — it will not be shown again.\n\n"
+  printf "  ${BOLD}Save this now${NC} -- it will not be shown again.\n\n"
 fi
 
 # ── Start ──────────────────────────────────────────────────────────────────────
@@ -254,11 +253,13 @@ if ! skip_step "start"; then
   sleep 3
 
   # Health check
-  for i in $(seq 1 20); do
+  i=1
+  while [ $i -le 20 ]; do
     if curl -sf "http://$HOST:$PORT/api/health" >/dev/null 2>&1; then
       ok "UnifyRoute is running!"
       break
     fi
+    i=$((i + 1))
     sleep 1
   done
 fi
